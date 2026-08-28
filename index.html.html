@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>iPhone 慣性導航－Excel 演算法版</title>
+<style>
+  :root{
+    --bg:#f5f5f7; --card:#ffffff; --text:#111114; --muted:#6e6e73;
+    --border:#d2d2d7; --accent:#007aff; --danger:#ff3b30;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:18px; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  .wrap{max-width:900px;margin:0 auto}
+  h1{font-size:26px;margin:6px 0 4px}
+  .sub{color:var(--muted);font-size:14px;margin-bottom:16px;line-height:1.5}
+  .card{background:var(--card);border-radius:18px;padding:16px;margin:12px 0;border:1px solid var(--border)}
+  .buttons{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  button{
+    min-height:48px;border:0;border-radius:13px;font-size:17px;font-weight:600;padding:10px 14px;
+    background:var(--accent);color:white
+  }
+  button.secondary{background:#e8e8ed;color:#111}
+  button.danger{background:var(--danger)}
+  button:disabled{opacity:.45}
+  .status{margin-top:10px;font-size:14px;color:var(--muted);line-height:1.5}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .metric{background:#f5f5f7;border-radius:13px;padding:11px;min-width:0}
+  .metric .k{font-size:12px;color:var(--muted)}
+  .metric .v{font-size:22px;font-variant-numeric:tabular-nums;margin-top:3px;overflow-wrap:anywhere}
+  .metric .u{font-size:11px;color:var(--muted)}
+  .section-title{font-size:16px;font-weight:700;margin-bottom:10px}
+  .params{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  label{font-size:13px;color:var(--muted)}
+  input{
+    width:100%;margin-top:5px;min-height:42px;border:1px solid var(--border);
+    border-radius:10px;background:white;color:var(--text);padding:8px 10px;font-size:16px
+  }
+  canvas{display:block;width:100%;height:260px;border-radius:13px;background:#fff;border:1px solid var(--border)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:8px 2px 0;font-size:12px;color:var(--muted)}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+  .x{background:#ff3b30}.y{background:#34c759}.z{background:#007aff}
+  .small{font-size:12px;color:var(--muted);line-height:1.55}
+  @media(max-width:560px){
+    body{padding:12px}
+    .grid{grid-template-columns:repeat(2,1fr)}
+    .buttons,.params{grid-template-columns:1fr}
+    canvas{height:235px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>iPhone 慣性導航</h1>
+  <div class="sub">依照你 Excel「Accelerometer」工作表的公式重寫：20 Hz 取樣、4 點移動視窗、重力座標旋轉、速度限制與 X/Y 位移積分。</div>
+
+  <div class="card">
+    <div class="buttons">
+      <button id="startBtn">開始感測</button>
+      <button id="stopBtn" class="secondary" disabled>停止</button>
+      <button id="resetBtn" class="secondary">歸零 / 重新校正</button>
+      <button id="csvBtn" class="secondary">匯出 CSV</button>
+    </div>
+    <div class="status" id="status">尚未開始。iPhone 請用 Safari 開啟 HTTPS 網址，再按「開始感測」授權動作與方向取用。</div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">即時原始感測值</div>
+    <div class="grid">
+      <div class="metric"><div class="k">加速度 X</div><div class="v" id="ax">0.000</div><div class="u">m/s²</div></div>
+      <div class="metric"><div class="k">加速度 Y</div><div class="v" id="ay">0.000</div><div class="u">m/s²</div></div>
+      <div class="metric"><div class="k">加速度 Z</div><div class="v" id="az">0.000</div><div class="u">m/s²</div></div>
+      <div class="metric"><div class="k">角速度 X</div><div class="v" id="gx">0.000</div><div class="u">rad/s</div></div>
+      <div class="metric"><div class="k">角速度 Y</div><div class="v" id="gy">0.000</div><div class="u">rad/s</div></div>
+      <div class="metric"><div class="k">角速度 Z</div><div class="v" id="gz">0.000</div><div class="u">rad/s</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Excel 演算法結果</div>
+    <div class="grid">
+      <div class="metric"><div class="k">判斷訊號 K</div><div class="v" id="kVal">0.000</div></div>
+      <div class="metric"><div class="k">平滑訊號 N</div><div class="v" id="nVal">0.000</div></div>
+      <div class="metric"><div class="k">正規化 AA</div><div class="v" id="aaVal">0.000</div></div>
+      <div class="metric"><div class="k">速度 AC</div><div class="v" id="speed">0.000</div><div class="u">m/s</div></div>
+      <div class="metric"><div class="k">累積距離 AD</div><div class="v" id="distance">0.000</div><div class="u">m</div></div>
+      <div class="metric"><div class="k">方向 θz</div><div class="v" id="theta">0.000</div><div class="u">rad</div></div>
+      <div class="metric"><div class="k">X 位置 AG</div><div class="v" id="posX">0.000</div><div class="u">m</div></div>
+      <div class="metric"><div class="k">Y 位置 AH</div><div class="v" id="posY">0.000</div><div class="u">m</div></div>
+      <div class="metric"><div class="k">轉換後 at (Z欄)</div><div class="v" id="atVal">0.000</div><div class="u">m/s²</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">演算法參數</div>
+    <div class="params">
+      <label>最大速度 AI（Excel = 1.2 m/s）
+        <input id="maxSpeed" type="number" value="1.2" min="0.1" max="10" step="0.05">
+      </label>
+      <label>訊號 2 最大值 AJ（Excel = 1.6）
+        <input id="signalMax" type="number" value="1.6" min="0.01" max="20" step="0.05">
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">X / Y / Z 加速度即時曲線</div>
+    <canvas id="accCanvas"></canvas>
+    <div class="legend"><span><i class="dot x"></i>X</span><span><i class="dot y"></i>Y</span><span><i class="dot z"></i>Z</span></div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">估算移動軌跡</div>
+    <canvas id="pathCanvas"></canvas>
+    <div class="small">起點固定在圖中央；圖形會自動縮放。這是慣性積分估算，感測器偏移會造成漂移。</div>
+  </div>
+
+  <div class="card small">
+    <b>與 Excel 的對應：</b>
+    B/C/D = accelerationIncludingGravity；E/F/G = iPhone rotationRate β/γ/α 換算為 rad/s；
+    H/I/J = 角速度 × Δt；K = 最近 4 筆 C 的 max-min；L/M/N = 各自最近 4 筆平均；
+    O = θz；Q～Y = 依 Excel 的旋轉公式更新重力方向；Z = 前一筆 C - 本筆 X；
+    AC = Excel 的速度判斷公式；AD = 距離；AE/AF = Vx/Vy；AG/AH = X/Y。
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = id => document.getElementById(id);
+  const els = {
+    start:$("startBtn"), stop:$("stopBtn"), reset:$("resetBtn"), csv:$("csvBtn"), status:$("status"),
+    ax:$("ax"), ay:$("ay"), az:$("az"), gx:$("gx"), gy:$("gy"), gz:$("gz"),
+    k:$("kVal"), n:$("nVal"), aa:$("aaVal"), speed:$("speed"), distance:$("distance"),
+    theta:$("theta"), posX:$("posX"), posY:$("posY"), at:$("atVal"),
+    maxSpeed:$("maxSpeed"), signalMax:$("signalMax"),
+    acc:$("accCanvas"), path:$("pathCanvas")
+  };
+
+  const SAMPLE_MS = 50; // Excel 約 20 Hz
+  const DEG2RAD = Math.PI / 180;
+  let running = false;
+  let startT = null;
+  let lastAcceptedT = null;
+  let latestEvent = null;
+  let rows = [];
+  let accHistory = [];
+  let pathHistory = [{x:0,y:0}];
+
+  // Excel 對應的遞迴狀態
+  let prev = null;
+  let K=[], L=[], M=[];
+  let thetaZ = 0;
+  let speed = 0, distance = 0, posX = 0, posY = 0;
+
+  function n(v, fallback=0){ return Number.isFinite(v) ? v : fallback; }
+  function avg(a){ return a.length ? a.reduce((s,v)=>s+v,0)/a.length : 0; }
+  function push4(a,v){ a.push(v); if(a.length>4)a.shift(); }
+  function fmt(v,d=3){ return n(v).toFixed(d); }
+
+  function resetState(){
+    startT = null; lastAcceptedT = null; latestEvent = null; rows = [];
+    accHistory = []; pathHistory = [{x:0,y:0}];
+    prev = null; K=[]; L=[]; M=[]; thetaZ=0; speed=0; distance=0; posX=0; posY=0;
+    updateDisplay({ax:0,ay:0,az:0,gx:0,gy:0,gz:0,k:0,n4:0,aa:0,speed:0,distance:0,thetaZ:0,posX:0,posY:0,at:0});
+    drawAll();
+    els.status.textContent = running ? "已歸零，下一筆資料將作為新的起始方向。" : "已歸零。按「開始感測」重新開始。";
+  }
+
+  function parseMotion(e){
+    const a = e.accelerationIncludingGravity || {};
+    const r = e.rotationRate || {};
+
+    // DeviceMotion rotationRate: beta≈x, gamma≈y, alpha≈z，單位 deg/s
+    return {
+      ax:n(a.x), ay:n(a.y), az:n(a.z),
+      gx:n(r.beta) * DEG2RAD,
+      gy:n(r.gamma) * DEG2RAD,
+      gz:n(r.alpha) * DEG2RAD
+    };
+  }
+
+  function processSample(s, now){
+    if(startT === null) startT = now;
+    const t = (now - startT)/1000;
+    let dt = prev ? Math.max(0.001, Math.min(0.2, (now-lastAcceptedT)/1000)) : 0.05;
+    lastAcceptedT = now;
+
+    const H = s.gx * dt;
+    const I = s.gy * dt;
+    const J = s.gz * dt;
+
+    let kval = 0, lval = 0, mval = 0, nval = 0;
+    // K = MAX(C[n-3:n]) - MIN(C[n-3:n]); 前 3 筆 Excel 為 0
+    if(!prev) {
+      push4(K,0); push4(L,0); push4(M,0);
+    } else {
+      const yWindow = rows.slice(-3).map(r=>r.ay).concat([s.ay]);
+      kval = yWindow.length >= 4 ? Math.max(...yWindow)-Math.min(...yWindow) : 0;
+      push4(K,kval);
+      lval = K.length >= 4 ? avg(K) : 0;
+      push4(L,lval);
+      mval = L.length >= 4 ? avg(L) : 0;
+      push4(M,mval);
+      nval = M.length >= 4 ? avg(M) : 0;
+    }
+
+    // Excel O[n] = J[n-1] + O[n-1]，即使用「前一筆」z角位移累加。
+    if(prev) thetaZ += prev.J;
+
+    // Q~Y：照 Excel 遞迴旋轉公式。
+    // 初始化 W/X/Y 對應第一筆可用的重力向量。
+    let W=s.ax, X=s.ay, Y=s.az;
+    if(prev){
+      const Q = prev.W;
+      const R = prev.X*Math.cos(H) + prev.Y*Math.sin(H);
+      const S = -prev.X*Math.sin(H) + prev.Y*Math.cos(H);
+      const T = -S*Math.sin(I) + Q*Math.cos(I);
+      const U = R;
+      const V = S*Math.cos(I) + Q*Math.sin(I);
+
+      if(nval < 0.5){
+        // Excel 公式 W=D, X=E, Y=F；原表此處疑似欄位引用不一致。
+        // 為保留「重置重力參考」的意圖，網頁使用目前的加速度重力向量。
+        W = s.ax; X = s.ay; Y = s.az;
+      }else{
+        W = T*Math.cos(J) + U*Math.sin(J);
+        X = -T*Math.sin(J) + U*Math.cos(J);
+        Y = V;
+      }
+    }
+
+    // Z 欄（at）：Excel = 前一筆 C - 本筆 X
+    const at = prev ? (prev.ay - X) : 0;
+
+    const maxSpeed = Math.max(0.01, Number(els.maxSpeed.value) || 1.2);
+    const signalMax = Math.max(0.001, Number(els.signalMax.value) || 1.6);
+    const aa = nval / signalMax;
+    const candidate = speed + at*dt;
+
+    // AC：逐字翻成 Excel 條件
+    let newSpeed;
+    if(kval < 0.1){
+      newSpeed = 0;
+    }else if(aa > 0.75 && candidate < 0.875*maxSpeed){
+      newSpeed = 0.875*maxSpeed;
+    }else if(aa > 0.5 && candidate < 0.5*maxSpeed){
+      newSpeed = 0.75*maxSpeed;
+    }else if(candidate > maxSpeed){
+      newSpeed = maxSpeed;
+    }else if(candidate < 0){
+      newSpeed = 0;
+    }else{
+      newSpeed = candidate;
+    }
+
+    distance += newSpeed * dt;
+    const vx = -newSpeed * Math.sin(thetaZ);
+    const vy =  newSpeed * Math.cos(thetaZ);
+
+    // Excel AG/AH 用前一列 AE/AF*前一列dt，所以位置也是一筆延遲
+    if(prev){
+      posX += prev.vx * prev.dt;
+      posY += prev.vy * prev.dt;
+    }
+
+    speed = newSpeed;
+
+    const row = {
+      t, dt, ...s, H,I,J, k:kval,l:lval,m:mval,n:nval, W,X,Y, at, aa,
+      speed:newSpeed, distance, vx,vy,thetaZ,posX,posY
+    };
+    rows.push(row);
+    prev = row;
+
+    accHistory.push({x:s.ax,y:s.ay,z:s.az});
+    if(accHistory.length>180) accHistory.shift();
+    pathHistory.push({x:posX,y:posY});
+    if(pathHistory.length>4000) pathHistory.shift();
+
+    updateDisplay(row);
+    drawAll();
+  }
+
+  function updateDisplay(r){
+    els.ax.textContent=fmt(r.ax); els.ay.textContent=fmt(r.ay); els.az.textContent=fmt(r.az);
+    els.gx.textContent=fmt(r.gx); els.gy.textContent=fmt(r.gy); els.gz.textContent=fmt(r.gz);
+    els.k.textContent=fmt(r.k); els.n.textContent=fmt(r.n ?? r.n4); els.aa.textContent=fmt(r.aa);
+    els.speed.textContent=fmt(r.speed); els.distance.textContent=fmt(r.distance);
+    els.theta.textContent=fmt(r.thetaZ); els.posX.textContent=fmt(r.posX); els.posY.textContent=fmt(r.posY);
+    els.at.textContent=fmt(r.at);
+  }
+
+  function onMotion(e){
+    if(!running) return;
+    latestEvent = e;
+    const now = performance.now();
+    if(lastAcceptedT === null || now-lastAcceptedT >= SAMPLE_MS-3){
+      processSample(parseMotion(latestEvent), now);
+    }
+  }
+
+  async function start(){
+    try{
+      if(typeof DeviceMotionEvent === "undefined"){
+        els.status.textContent="此瀏覽器沒有 DeviceMotionEvent。請使用 iPhone Safari。";
+        return;
+      }
+      if(typeof DeviceMotionEvent.requestPermission === "function"){
+        const p = await DeviceMotionEvent.requestPermission();
+        if(p !== "granted"){
+          els.status.textContent="動作感測器權限未授權。請重新載入頁面後再試一次。";
+          return;
+        }
+      }
+      if(!running){
+        running=true;
+        window.addEventListener("devicemotion", onMotion, {passive:true});
+        els.start.disabled=true; els.stop.disabled=false;
+        els.status.textContent="感測中：演算法以約 20 Hz 計算。開始時請讓手機保持你實驗中使用的固定姿態。";
+      }
+    }catch(err){
+      els.status.textContent="無法啟動感測器："+(err?.message || String(err));
+    }
+  }
+
+  function stop(){
+    if(running){
+      running=false;
+      window.removeEventListener("devicemotion", onMotion);
+      els.start.disabled=false; els.stop.disabled=true;
+      els.status.textContent=`已停止，共記錄 ${rows.length} 筆計算資料。`;
+    }
+  }
+
+  function exportCSV(){
+    if(!rows.length){ els.status.textContent="目前沒有資料可匯出。"; return; }
+    const head=["t","dt","ax","ay","az","gx","gy","gz","H","I","J","K","L","M","N","W","X","Y","at_Z","AA","speed_AC","distance_AD","vx_AE","vy_AF","thetaZ_O","posX_AG","posY_AH"];
+    const body=rows.map(r=>[
+      r.t,r.dt,r.ax,r.ay,r.az,r.gx,r.gy,r.gz,r.H,r.I,r.J,r.k,r.l,r.m,r.n,r.W,r.X,r.Y,r.at,r.aa,r.speed,r.distance,r.vx,r.vy,r.thetaZ,r.posX,r.posY
+    ].map(v=>Number.isFinite(v)?v:"").join(","));
+    const csv="\uFEFF"+head.join(",")+"\n"+body.join("\n");
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=`iphone_inertial_${new Date().toISOString().replace(/[:.]/g,"-")}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    els.status.textContent=`已產生 CSV，共 ${rows.length} 筆。`;
+  }
+
+  function setupCanvas(c){
+    const dpr=Math.max(1,window.devicePixelRatio||1);
+    const rect=c.getBoundingClientRect();
+    const w=Math.max(300,Math.round(rect.width*dpr));
+    const h=Math.max(180,Math.round(rect.height*dpr));
+    if(c.width!==w||c.height!==h){c.width=w;c.height=h}
+    const ctx=c.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return {ctx,w:rect.width,h:rect.height};
+  }
+
+  function drawAcc(){
+    const {ctx,w,h}=setupCanvas(els.acc);
+    ctx.clearRect(0,0,w,h);
+    ctx.strokeStyle="#d2d2d7"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,h/2);ctx.lineTo(w,h/2);ctx.stroke();
+    const all=accHistory.flatMap(p=>[Math.abs(p.x),Math.abs(p.y),Math.abs(p.z)]);
+    const max=Math.max(2,...all);
+    const scale=(h*0.44)/max;
+    const colors={x:"#ff3b30",y:"#34c759",z:"#007aff"};
+    ["x","y","z"].forEach(key=>{
+      if(accHistory.length<2)return;
+      ctx.strokeStyle=colors[key];ctx.lineWidth=1.8;ctx.beginPath();
+      accHistory.forEach((p,i)=>{
+        const x=i/(Math.max(1,accHistory.length-1))*w;
+        const y=h/2-p[key]*scale;
+        i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+      });
+      ctx.stroke();
+    });
+  }
+
+  function drawPath(){
+    const {ctx,w,h}=setupCanvas(els.path);
+    ctx.clearRect(0,0,w,h);
+    const xs=pathHistory.map(p=>p.x), ys=pathHistory.map(p=>p.y);
+    const minX=Math.min(0,...xs), maxX=Math.max(0,...xs), minY=Math.min(0,...ys), maxY=Math.max(0,...ys);
+    const spanX=Math.max(1,maxX-minX), spanY=Math.max(1,maxY-minY);
+    const pad=28, scale=Math.min((w-2*pad)/spanX,(h-2*pad)/spanY);
+    const cx=pad+(0-minX)*scale, cy=h-pad-(0-minY)*scale;
+
+    ctx.strokeStyle="#e5e5ea";ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(w,cy);ctx.moveTo(cx,0);ctx.lineTo(cx,h);ctx.stroke();
+
+    if(pathHistory.length>1){
+      ctx.strokeStyle="#007aff";ctx.lineWidth=2.2;ctx.beginPath();
+      pathHistory.forEach((p,i)=>{
+        const x=pad+(p.x-minX)*scale;
+        const y=h-pad-(p.y-minY)*scale;
+        i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+      }); ctx.stroke();
+    }
+    ctx.fillStyle="#34c759";ctx.beginPath();ctx.arc(cx,cy,5,0,Math.PI*2);ctx.fill();
+    const end=pathHistory[pathHistory.length-1];
+    const ex=pad+(end.x-minX)*scale, ey=h-pad-(end.y-minY)*scale;
+    ctx.fillStyle="#ff3b30";ctx.beginPath();ctx.arc(ex,ey,5,0,Math.PI*2);ctx.fill();
+  }
+
+  function drawAll(){ drawAcc(); drawPath(); }
+
+  els.start.addEventListener("click",start);
+  els.stop.addEventListener("click",stop);
+  els.reset.addEventListener("click",resetState);
+  els.csv.addEventListener("click",exportCSV);
+  window.addEventListener("resize",drawAll);
+  resetState();
+})();
+</script>
+</body>
+</html>
