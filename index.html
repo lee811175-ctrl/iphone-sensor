@@ -4,324 +4,126 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>iPhone 計步器－Excel 公式版</title>
+<title>iPhone 計步器－計步2 Excel版</title>
 <style>
-:root{
-  --bg:#f5f5f7;--card:#fff;--text:#111114;--muted:#6e6e73;--line:#d2d2d7;
-  --accent:#007aff;--danger:#ff3b30;--ok:#34c759;
-}
-*{box-sizing:border-box}
-body{margin:0;padding:14px;background:var(--bg);color:var(--text);
-font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-.wrap{max-width:900px;margin:auto}
-h1{font-size:25px;margin:5px 0}
-.sub{font-size:13px;color:var(--muted);line-height:1.55;margin-bottom:12px}
+:root{--bg:#f5f5f7;--card:#fff;--text:#111114;--muted:#6e6e73;--line:#d2d2d7;--accent:#007aff;--danger:#ff3b30}
+*{box-sizing:border-box} body{margin:0;padding:14px;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+.wrap{max-width:900px;margin:auto} h1{font-size:25px;margin:5px 0}.sub,.status,.note{font-size:13px;color:var(--muted);line-height:1.55}
 .card{background:var(--card);border:1px solid var(--line);border-radius:17px;padding:15px;margin:11px 0}
-.actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
-button{min-height:48px;border:0;border-radius:12px;background:var(--accent);color:#fff;
-font-size:16px;font-weight:650;padding:9px}
-button.secondary{background:#e8e8ed;color:#111}
-button.danger{background:var(--danger)}
-button:disabled{opacity:.45}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
-.stat{background:#f5f5f7;border-radius:13px;padding:12px;min-width:0}
-.k{font-size:12px;color:var(--muted)}
-.v{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:3px}
-.u{font-size:11px;color:var(--muted)}
+.actions{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+button{min-height:48px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-size:16px;font-weight:650;padding:9px}
+button.secondary{background:#e8e8ed;color:#111} button:disabled{opacity:.45}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.stat{background:#f5f5f7;border-radius:13px;padding:12px}
+.k{font-size:12px;color:var(--muted)}.v{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:3px}.u{font-size:11px;color:var(--muted)}
 .big .v{font-size:52px;color:var(--accent)}
-.status{font-size:13px;color:var(--muted);line-height:1.5;margin-top:10px}
-canvas{display:block;width:100%;height:300px;background:#fff;border:1px solid var(--line);border-radius:13px}
-.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
-.sw{width:11px;height:3px;display:inline-block;vertical-align:middle;margin-right:5px;border-radius:3px}
-.raw{background:#9aa0a6}.flt{background:#007aff}.step{background:#ff3b30;height:10px;width:10px;border-radius:50%}
-.params{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-label{font-size:13px;color:var(--muted)}
-input{width:100%;margin-top:5px;min-height:42px;border:1px solid var(--line);border-radius:10px;
-padding:8px 10px;background:#fff;color:var(--text);font-size:16px}
-.note{font-size:12px;color:var(--muted);line-height:1.6}
-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-@media(max-width:600px){
-  .actions{grid-template-columns:1fr 1fr}
-  .stats{grid-template-columns:repeat(2,1fr)}
-  .params{grid-template-columns:1fr}
-  canvas{height:250px}
-}
+canvas{display:block;width:100%;height:290px;background:#fff;border:1px solid var(--line);border-radius:13px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}.sw{width:11px;height:3px;display:inline-block;margin-right:5px;vertical-align:middle}.raw{background:#9aa0a6}.flt{background:#007aff}.step{background:#ff3b30;height:10px;width:10px;border-radius:50%}
+.params{display:grid;grid-template-columns:1fr 1fr;gap:10px}label{font-size:13px;color:var(--muted)}input{width:100%;margin-top:5px;min-height:42px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:16px}
+@media(max-width:600px){.actions,.stats{grid-template-columns:1fr 1fr}.params{grid-template-columns:1fr}canvas{height:245px}}
 </style>
 </head>
-<body>
-<div class="wrap">
-<h1>iPhone 計步器</h1>
-<div class="sub">依照「計步.xlsx」Raw Data 工作表重寫：固定以 0.01 秒（100 Hz）時間格點取樣 Z 軸加速度，連續四層 29 點平均，再用 15 點 V 型谷底條件判斷一步。</div>
+<body><div class="wrap">
+<h1>iPhone 計步器－計步2</h1>
+<div class="sub">依照「計步2.xlsx」重新生成：0.01 秒時間尺度、Z 軸加速度、四層 14 點平均，以及 Excel 的 15 點谷底判斷與 0.3 m/s² 谷深條件。</div>
 
-<div class="card">
-  <div class="actions">
-    <button id="start">開始計步</button>
-    <button id="stop" class="secondary" disabled>停止</button>
-    <button id="reset" class="secondary">歸零</button>
-    <button id="csv" class="secondary">匯出 CSV</button>
-  </div>
-  <div id="status" class="status">請在 iPhone Safari 的 HTTPS 網址中開啟，按「開始計步」後允許動作感測器權限。</div>
-</div>
+<div class="card"><div class="actions">
+<button id="start">開始計步</button><button id="stop" class="secondary" disabled>停止</button>
+<button id="reset" class="secondary">歸零</button><button id="csv" class="secondary">匯出 CSV</button>
+</div><div id="status" class="status" style="margin-top:10px">請用 iPhone Safari 的 HTTPS 網址開啟，再按「開始計步」。</div></div>
 
-<div class="card">
-  <div class="stats">
-    <div class="stat big"><div class="k">累計步數</div><div class="v" id="steps">0</div><div class="u">步</div></div>
-    <div class="stat"><div class="k">Z 原始值 D</div><div class="v" id="zraw">0.000</div><div class="u">m/s²</div></div>
-    <div class="stat"><div class="k">四層平滑 I</div><div class="v" id="smooth4">—</div><div class="u">m/s²</div></div>
-    <div class="stat"><div class="k">目前取樣率</div><div class="v" id="hz">0</div><div class="u">Hz</div></div>
-  </div>
-</div>
+<div class="card"><div class="stats">
+<div class="stat big"><div class="k">累計步數</div><div class="v" id="steps">0</div><div class="u">步</div></div>
+<div class="stat"><div class="k">Z 原始值 D</div><div class="v" id="zraw">0.000</div><div class="u">m/s²</div></div>
+<div class="stat"><div class="k">平滑訊號 I</div><div class="v" id="smooth">—</div><div class="u">m/s²</div></div>
+<div class="stat"><div class="k">Safari 回報率</div><div class="v" id="hz">0</div><div class="u">Hz</div></div>
+</div></div>
 
-<div class="card">
-  <div style="font-weight:700;margin-bottom:10px">即時波形</div>
-  <canvas id="chart"></canvas>
-  <div class="legend">
-    <span><i class="sw raw"></i>Z 原始加速度</span>
-    <span><i class="sw flt"></i>四層平滑 I</span>
-    <span><i class="sw step"></i>判定為一步</span>
-  </div>
-</div>
+<div class="card"><div style="font-weight:700;margin-bottom:10px">即時波形</div><canvas id="chart"></canvas>
+<div class="legend"><span><i class="sw raw"></i>Z 原始值</span><span><i class="sw flt"></i>四層平滑 I</span><span><i class="sw step"></i>判定一步</span></div></div>
 
-<div class="card">
-  <div style="font-weight:700;margin-bottom:10px">Excel 判斷參數</div>
-  <div class="params">
-    <label>每層移動平均點數
-      <input id="windowSize" type="number" value="29" min="3" max="101" step="2">
-    </label>
-    <label>谷深門檻（Excel = 0.03）
-      <input id="threshold" type="number" value="0.03" min="0" max="5" step="0.01">
-    </label>
-  </div>
-  <div class="note" style="margin-top:10px">
-    Excel 原式使用 <code>AVERAGE(D2:D30)</code>，因此視窗為 29 點；J 欄要求前 7 點連續下降、後 7 點連續上升，
-    並且 <code>I[start] - I[valley] &gt; 0.03</code>。網頁採用等價的「因果式」四層 29 點平均，因此波形形狀相同但時間會往後延遲。
-  </div>
-</div>
+<div class="card"><div style="font-weight:700;margin-bottom:10px">Excel 參數</div>
+<div class="params"><label>每層平均點數<input id="window" type="number" value="14" min="3" max="101"></label>
+<label>谷深門檻<input id="threshold" type="number" value="0.3" min="0" max="5" step="0.05"></label></div>
+<div class="note" style="margin-top:10px">「計步2.xlsx」的 <b>AVERAGE(D2:D15)</b> 是 14 點，不是前一版的 29 點。四層皆為 14 點平均。J 欄以 15 個 I 值判斷：前 7 段下降、後 7 段上升；從第 3 列起另要求未來第 20 點與谷底的差值大於 0.3。</div></div>
 
-<div class="card note">
-  <b>取樣設定：</b>演算法時間格點固定為 <b>0.01 秒（100 Hz）</b>，因此 29 點平均固定代表約 0.29 秒。
-  上方「目前取樣率」顯示的是 Safari 實際送出感測器事件的頻率。若 iPhone 本身只提供低於 100 Hz 的資料，
-  網頁不能產生不存在的新感測資料，因此不會用重複值假裝成真正 100 Hz；這種情況需再依實機回報率處理。
-</div>
+<div class="card note"><b>時間：</b>原始 Excel 相鄰資料約 0.010025 秒，這版以 0.01 秒為目標時間尺度。實際可取得的新感測資料仍受 iPhone Safari 的 DeviceMotion 回報頻率限制；畫面會顯示實際 Hz。</div>
 </div>
 
 <script>
 (()=>{
 "use strict";
-const $=id=>document.getElementById(id);
-const el={
- start:$("start"),stop:$("stop"),reset:$("reset"),csv:$("csv"),status:$("status"),
- steps:$("steps"),zraw:$("zraw"),smooth4:$("smooth4"),hz:$("hz"),
- chart:$("chart"),win:$("windowSize"),thr:$("threshold")
-};
+const $=x=>document.getElementById(x), E={start:$("start"),stop:$("stop"),reset:$("reset"),csv:$("csv"),status:$("status"),steps:$("steps"),z:$("zraw"),smooth:$("smooth"),hz:$("hz"),chart:$("chart"),win:$("window"),thr:$("threshold")};
+const SAMPLE=0.01;
+let running=false,lastEvent=null,nextSample=null,hzs=[],latestZ=0,steps=0;
+let q1=[],q2=[],q3=[],q4=[], rows=[], visible=[], markers=[];
 
-let running=false, steps=0, lastEventT=null, hzSamples=[];
-const SAMPLE_INTERVAL_S = 0.01; // Excel 固定時間間隔 0.01 秒 = 100 Hz
-let nextSampleT=null, latestZ=0;
-let rawRows=[], chartRows=[];
-let q1=[],q2=[],q3=[],q4=[];
-let stage1=[],stage2=[],stage3=[],stage4=[];
-let iBuffer=[]; // 最近 I 值，至少 15 點
-let stepMarkers=[];
-
-function finite(v){return Number.isFinite(v)?v:0}
-function avg(a){return a.reduce((s,v)=>s+v,0)/a.length}
-function windowN(){
-  let n=Math.round(Number(el.win.value)||29);
-  if(n<3)n=3;
-  if(n>101)n=101;
-  return n;
+const avg=a=>a.reduce((s,v)=>s+v,0)/a.length;
+function mov(q,v,n){q.push(v);if(q.length>n)q.shift();return q.length===n?avg(q):null}
+function reset(){
+ steps=0;lastEvent=null;nextSample=null;hzs=[];q1=[];q2=[];q3=[];q4=[];rows=[];visible=[];markers=[];
+ E.steps.textContent="0";E.z.textContent="0.000";E.smooth.textContent="—";E.hz.textContent="0";draw();
+ E.status.textContent=running?"已歸零，重新計步。":"已歸零。";
 }
-function pushMoving(queue,v,n){
-  queue.push(v);
-  if(queue.length>n)queue.shift();
-  return queue.length===n?avg(queue):null;
-}
+function sample(z,t){
+ const n=Math.max(3,Math.round(+E.win.value||14));
+ const f=mov(q1,z,n), g=f===null?null:mov(q2,f,n), h=g===null?null:mov(q3,g,n), i=h===null?null:mov(q4,h,n);
+ const r={t,z,f,g,h,i,step:0}; rows.push(r); visible.push(r);if(visible.length>600)visible.shift();
+ E.z.textContent=z.toFixed(3);if(i!==null)E.smooth.textContent=i.toFixed(3);
 
-function resetState(){
- steps=0;lastEventT=null;hzSamples=[];
- rawRows=[];chartRows=[];q1=[];q2=[];q3=[];q4=[];nextSampleT=null;latestZ=0;
- stage1=[];stage2=[];stage3=[];stage4=[];iBuffer=[];stepMarkers=[];
- el.steps.textContent="0";el.zraw.textContent="0.000";el.smooth4.textContent="—";el.hz.textContent="0";
- draw();
- el.status.textContent=running?"已歸零，重新開始計步。":"已歸零。";
-}
-
-function processZ(z,t){
- const n=windowN();
- const f=pushMoving(q1,z,n);
- let g=null,h=null,i=null;
- if(f!==null) g=pushMoving(q2,f,n);
- if(g!==null) h=pushMoving(q3,g,n);
- if(h!==null) i=pushMoving(q4,h,n);
-
- const row={t,z,f,g,h,i,step:0};
- rawRows.push(row);
-
- if(i!==null){
-   iBuffer.push({t,i,row});
-   if(iBuffer.length>15)iBuffer.shift();
-
-   // Excel J: 7 個連續下降 + 7 個連續上升，谷底在第 8 點(index 7)
-   if(iBuffer.length===15){
-     let desc=true,asc=true;
-     for(let k=0;k<7;k++){
-       if(!(iBuffer[k].i > iBuffer[k+1].i)){desc=false;break;}
-     }
-     for(let k=7;k<14;k++){
-       if(!(iBuffer[k].i < iBuffer[k+1].i)){asc=false;break;}
-     }
-     const threshold=Math.max(0,Number(el.thr.value)||0.03);
-     const deep=(iBuffer[0].i-iBuffer[7].i)>threshold;
-
-     if(desc && asc && deep){
-       // 避免同一谷底被重複計數；Excel 每一列僅有一個符合完整15點形狀的位置
-       const valley=iBuffer[7];
-       if(!valley.row.step){
-         steps++;
-         valley.row.step=steps;
-         stepMarkers.push({t:valley.t,i:valley.i,step:steps});
-         el.steps.textContent=String(steps);
-       }
-     }
+ // Excel 是「向前看」公式，因此即時版要等未來資料到齊後，回頭判斷較早的一列。
+ // 對候選 row c：需要 I[c..c+14] 做V形，且 c>=1 時還需要 I[c+27]-I[c+7] > threshold。
+ const c=rows.length-28;
+ if(c>=0){
+   let ok=true;
+   for(let k=0;k<7;k++) if(!(rows[c+k].i!==null && rows[c+k+1].i!==null && rows[c+k].i>rows[c+k+1].i)){ok=false;break}
+   if(ok) for(let k=7;k<14;k++) if(!(rows[c+k].i!==null && rows[c+k+1].i!==null && rows[c+k].i<rows[c+k+1].i)){ok=false;break}
+   if(ok && c>=1){
+     const a=rows[c+27].i, valley=rows[c+7].i, th=Math.max(0,+E.thr.value||0.3);
+     ok=Number.isFinite(a)&&Number.isFinite(valley)&&(a-valley>th);
+   }
+   if(ok){
+     steps++;rows[c].step=steps;E.steps.textContent=String(steps);
+     markers.push({t:rows[c+7].t,i:rows[c+7].i});if(markers.length>100)markers.shift();
    }
  }
-
- el.zraw.textContent=z.toFixed(3);
- if(i!==null)el.smooth4.textContent=i.toFixed(3);
-
- chartRows.push({t,z,i});
- if(chartRows.length>600)chartRows.shift();
- if(stepMarkers.length>100)stepMarkers.shift();
-
- if(rawRows.length%3===0)draw();
+ if(rows.length%3===0)draw();
 }
-
-function motion(e){
+function motion(ev){
  if(!running)return;
- const a=e.accelerationIncludingGravity||{};
- latestZ=finite(a.z);
- const now=performance.now();
-
- // 顯示 Safari 實際感測器事件回報率
- if(lastEventT!==null){
-   const dt=(now-lastEventT)/1000;
-   if(dt>0 && dt<0.2){
-     hzSamples.push(1/dt);
-     if(hzSamples.length>80)hzSamples.shift();
-     const hz=hzSamples.reduce((s,v)=>s+v,0)/hzSamples.length;
-     el.hz.textContent=hz.toFixed(0);
-   }
- }
- lastEventT=now;
-
- // Excel 的時間軸固定每 0.01 秒一筆。
- // 若瀏覽器事件快於 100 Hz，就只在下一個 0.01 s 格點取樣；
- // 若事件較慢，無法憑空取得真正的 100 Hz 新感測值，因此不製造假資料。
- const nowS=now/1000;
- if(nextSampleT===null) nextSampleT=nowS;
- if(nowS+0.0005 >= nextSampleT){
-   processZ(latestZ,nextSampleT);
-   nextSampleT += SAMPLE_INTERVAL_S;
-
-   // 若 Safari 曾暫停/卡頓，不用同一筆資料補出大量假樣本，直接重新對齊時間格點。
-   if(nowS-nextSampleT > 0.03) nextSampleT=nowS+SAMPLE_INTERVAL_S;
- }
+ latestZ=Number.isFinite(ev.accelerationIncludingGravity?.z)?ev.accelerationIncludingGravity.z:0;
+ const now=performance.now(), nowS=now/1000;
+ if(lastEvent!==null){const dt=(now-lastEvent)/1000;if(dt>0&&dt<.2){hzs.push(1/dt);if(hzs.length>80)hzs.shift();E.hz.textContent=(hzs.reduce((s,v)=>s+v,0)/hzs.length).toFixed(0)}}lastEvent=now;
+ if(nextSample===null)nextSample=nowS;
+ if(nowS+.0005>=nextSample){sample(latestZ,nextSample);nextSample+=SAMPLE;if(nowS-nextSample>.03)nextSample=nowS+SAMPLE}
 }
-
 async function start(){
  try{
-   if(typeof DeviceMotionEvent==="undefined"){
-     el.status.textContent="這個瀏覽器沒有提供 DeviceMotionEvent，請使用 iPhone Safari。";
-     return;
-   }
-   if(typeof DeviceMotionEvent.requestPermission==="function"){
-     const p=await DeviceMotionEvent.requestPermission();
-     if(p!=="granted"){
-       el.status.textContent="動作與方向權限未允許。請重新載入頁面後再試。";
-       return;
-     }
-   }
-   if(!running){
-     running=true;
-     window.addEventListener("devicemotion",motion,{passive:true});
-     el.start.disabled=true;el.stop.disabled=false;
-     el.status.textContent="計步中：時間間隔固定 0.01 秒（100 Hz）。四層 29 點平滑 + 谷底判定會造成約 1 秒以上延遲，這是正常的。";
-   }
- }catch(err){
-   el.status.textContent="啟動失敗："+(err?.message||String(err));
- }
+  if(typeof DeviceMotionEvent==="undefined"){E.status.textContent="此瀏覽器沒有動作感測器介面。";return}
+  if(typeof DeviceMotionEvent.requestPermission==="function"){if(await DeviceMotionEvent.requestPermission()!=="granted"){E.status.textContent="未取得動作感測器權限。";return}}
+  if(!running){running=true;window.addEventListener("devicemotion",motion,{passive:true});E.start.disabled=true;E.stop.disabled=false;E.status.textContent="計步中。因四層平滑及向前看判斷，步數會延遲顯示。"}
+ }catch(e){E.status.textContent="啟動失敗："+e}
 }
-function stop(){
- if(running){
-   running=false;window.removeEventListener("devicemotion",motion);
-   el.start.disabled=false;el.stop.disabled=true;
-   el.status.textContent=`已停止，共偵測 ${steps} 步。`;
- }
+function stop(){if(running){running=false;window.removeEventListener("devicemotion",motion);E.start.disabled=false;E.stop.disabled=true;E.status.textContent=`已停止，共 ${steps} 步。`}}
+function csv(){
+ if(!rows.length){E.status.textContent="沒有資料可匯出。";return}
+ const head=["time_s","acceleration_z_D","smooth_F","smooth_G","smooth_H","smooth_I","count_J"];
+ const lines=rows.map(r=>[r.t,r.z,r.f,r.g,r.h,r.i,r.step].map(v=>v==null?"":v).join(","));
+ const b=new Blob(["\uFEFF"+head.join(",")+"\n"+lines.join("\n")],{type:"text/csv;charset=utf-8"}),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download="step2_result.csv";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)
 }
-function exportCSV(){
- if(!rawRows.length){el.status.textContent="目前沒有資料可匯出。";return;}
- const head=["time_s","acceleration_z_D","smooth_F","smooth_G","smooth_H","smooth_I","step_J"];
- const lines=rawRows.map(r=>[r.t,r.z,r.f,r.g,r.h,r.i,r.step||0]
-  .map(v=>(v===null||v===undefined)?"":v).join(","));
- const blob=new Blob(["\uFEFF"+head.join(",")+"\n"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
- const url=URL.createObjectURL(blob);
- const a=document.createElement("a");a.href=url;a.download="iphone_step_excel_formula.csv";
- document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
- el.status.textContent=`CSV 已產生，共 ${rawRows.length} 筆資料。`;
-}
-
-function setupCanvas(){
- const c=el.chart,dpr=Math.max(1,window.devicePixelRatio||1),r=c.getBoundingClientRect();
- const pw=Math.round(r.width*dpr),ph=Math.round(r.height*dpr);
- if(c.width!==pw||c.height!==ph){c.width=pw;c.height=ph}
- const ctx=c.getContext("2d");ctx.setTransform(dpr,0,0,dpr,0,0);
- return {ctx,w:r.width,h:r.height};
+function canvas(){
+ const c=E.chart,d=devicePixelRatio||1,r=c.getBoundingClientRect();if(c.width!==Math.round(r.width*d)||c.height!==Math.round(r.height*d)){c.width=Math.round(r.width*d);c.height=Math.round(r.height*d)}
+ const x=c.getContext("2d");x.setTransform(d,0,0,d,0,0);return{x,w:r.width,h:r.height}
 }
 function draw(){
- const {ctx,w,h}=setupCanvas();
- ctx.clearRect(0,0,w,h);
- if(!chartRows.length){
-   ctx.fillStyle="#6e6e73";ctx.font="14px -apple-system";ctx.fillText("開始計步後顯示波形",18,30);return;
- }
- const vals=[];
- chartRows.forEach(p=>{if(Number.isFinite(p.z))vals.push(p.z);if(Number.isFinite(p.i))vals.push(p.i)});
- let min=Math.min(...vals),max=Math.max(...vals);
- if(max-min<0.5){min-=0.25;max+=0.25}
- const pad=18;
- const X=i=>pad+i/Math.max(1,chartRows.length-1)*(w-2*pad);
- const Y=v=>h-pad-(v-min)/(max-min)*(h-2*pad);
-
- // horizontal grid
- ctx.strokeStyle="#e5e5ea";ctx.lineWidth=1;
- for(let k=1;k<5;k++){let y=k*h/5;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
-
- function line(key,color,width){
-   ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();let begun=false;
-   chartRows.forEach((p,i)=>{
-     const v=p[key];if(!Number.isFinite(v))return;
-     if(!begun){ctx.moveTo(X(i),Y(v));begun=true}else ctx.lineTo(X(i),Y(v));
-   });ctx.stroke();
- }
- line("z","#9aa0a6",1.2);
- line("i","#007aff",2.1);
-
- // step markers nearest by time
- const t0=chartRows[0].t,t1=chartRows[chartRows.length-1].t;
- stepMarkers.forEach(m=>{
-   if(m.t<t0||m.t>t1)return;
-   const x=pad+(m.t-t0)/Math.max(.001,t1-t0)*(w-2*pad), y=Y(m.i);
-   ctx.fillStyle="#ff3b30";ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
- });
+ const {x,w,h}=canvas();x.clearRect(0,0,w,h);if(!visible.length){x.fillStyle="#6e6e73";x.font="14px sans-serif";x.fillText("開始後顯示波形",18,30);return}
+ const vs=[];visible.forEach(r=>{if(Number.isFinite(r.z))vs.push(r.z);if(Number.isFinite(r.i))vs.push(r.i)});let mn=Math.min(...vs),mx=Math.max(...vs);if(mx-mn<.5){mn-=.25;mx+=.25}
+ const p=18,X=i=>p+i/Math.max(1,visible.length-1)*(w-2*p),Y=v=>h-p-(v-mn)/(mx-mn)*(h-2*p);
+ x.strokeStyle="#e5e5ea";for(let k=1;k<5;k++){x.beginPath();x.moveTo(0,k*h/5);x.lineTo(w,k*h/5);x.stroke()}
+ function line(key,col,lw){x.strokeStyle=col;x.lineWidth=lw;x.beginPath();let b=false;visible.forEach((r,i)=>{let v=r[key];if(!Number.isFinite(v))return;b?x.lineTo(X(i),Y(v)):(x.moveTo(X(i),Y(v)),b=true)});x.stroke()}
+ line("z","#9aa0a6",1.1);line("i","#007aff",2);
+ const t0=visible[0].t,t1=visible[visible.length-1].t;markers.forEach(m=>{if(m.t<t0||m.t>t1||!Number.isFinite(m.i))return;let xx=p+(m.t-t0)/Math.max(.001,t1-t0)*(w-2*p);x.fillStyle="#ff3b30";x.beginPath();x.arc(xx,Y(m.i),5,0,Math.PI*2);x.fill()})
 }
-
-el.start.addEventListener("click",start);
-el.stop.addEventListener("click",stop);
-el.reset.addEventListener("click",resetState);
-el.csv.addEventListener("click",exportCSV);
-window.addEventListener("resize",draw);
-resetState();
+E.start.addEventListener("click",start);E.stop.addEventListener("click",stop);E.reset.addEventListener("click",reset);E.csv.addEventListener("click",csv);window.addEventListener("resize",draw);reset();
 })();
 </script>
-</body>
-</html>
+</body></html>
