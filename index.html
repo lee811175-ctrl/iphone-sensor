@@ -51,7 +51,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 <body>
 <div class="wrap">
 <h1>iPhone 計步器</h1>
-<div class="sub">依照「計步.xlsx」Raw Data 工作表重寫：使用 Z 軸加速度，連續四層 29 點平均，再用 15 點 V 型谷底條件判斷一步。</div>
+<div class="sub">依照「計步.xlsx」Raw Data 工作表重寫：固定以 0.01 秒（100 Hz）時間格點取樣 Z 軸加速度，連續四層 29 點平均，再用 15 點 V 型谷底條件判斷一步。</div>
 
 <div class="card">
   <div class="actions">
@@ -99,8 +99,9 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 </div>
 
 <div class="card note">
-  <b>重要：</b>你 Excel 資料的時間間隔大約是 0.010 秒，也就是約 100 Hz。Safari 的實際感測器回報率可能因 iPhone / iOS 而不同，
-  所以上方會即時顯示 Hz。若不是接近 100 Hz，29 點平均代表的實際時間長度就會和 Excel 不完全一樣；之後可改成「固定 0.29 秒視窗」版本。
+  <b>取樣設定：</b>演算法時間格點固定為 <b>0.01 秒（100 Hz）</b>，因此 29 點平均固定代表約 0.29 秒。
+  上方「目前取樣率」顯示的是 Safari 實際送出感測器事件的頻率。若 iPhone 本身只提供低於 100 Hz 的資料，
+  網頁不能產生不存在的新感測資料，因此不會用重複值假裝成真正 100 Hz；這種情況需再依實機回報率處理。
 </div>
 </div>
 
@@ -115,6 +116,8 @@ const el={
 };
 
 let running=false, steps=0, lastEventT=null, hzSamples=[];
+const SAMPLE_INTERVAL_S = 0.01; // Excel 固定時間間隔 0.01 秒 = 100 Hz
+let nextSampleT=null, latestZ=0;
 let rawRows=[], chartRows=[];
 let q1=[],q2=[],q3=[],q4=[];
 let stage1=[],stage2=[],stage3=[],stage4=[];
@@ -137,7 +140,7 @@ function pushMoving(queue,v,n){
 
 function resetState(){
  steps=0;lastEventT=null;hzSamples=[];
- rawRows=[];chartRows=[];q1=[];q2=[];q3=[];q4=[];
+ rawRows=[];chartRows=[];q1=[];q2=[];q3=[];q4=[];nextSampleT=null;latestZ=0;
  stage1=[];stage2=[];stage3=[];stage4=[];iBuffer=[];stepMarkers=[];
  el.steps.textContent="0";el.zraw.textContent="0.000";el.smooth4.textContent="—";el.hz.textContent="0";
  draw();
@@ -197,9 +200,10 @@ function processZ(z,t){
 function motion(e){
  if(!running)return;
  const a=e.accelerationIncludingGravity||{};
- const z=finite(a.z);
+ latestZ=finite(a.z);
  const now=performance.now();
 
+ // 顯示 Safari 實際感測器事件回報率
  if(lastEventT!==null){
    const dt=(now-lastEventT)/1000;
    if(dt>0 && dt<0.2){
@@ -210,7 +214,19 @@ function motion(e){
    }
  }
  lastEventT=now;
- processZ(z,now/1000);
+
+ // Excel 的時間軸固定每 0.01 秒一筆。
+ // 若瀏覽器事件快於 100 Hz，就只在下一個 0.01 s 格點取樣；
+ // 若事件較慢，無法憑空取得真正的 100 Hz 新感測值，因此不製造假資料。
+ const nowS=now/1000;
+ if(nextSampleT===null) nextSampleT=nowS;
+ if(nowS+0.0005 >= nextSampleT){
+   processZ(latestZ,nextSampleT);
+   nextSampleT += SAMPLE_INTERVAL_S;
+
+   // 若 Safari 曾暫停/卡頓，不用同一筆資料補出大量假樣本，直接重新對齊時間格點。
+   if(nowS-nextSampleT > 0.03) nextSampleT=nowS+SAMPLE_INTERVAL_S;
+ }
 }
 
 async function start(){
@@ -230,7 +246,7 @@ async function start(){
      running=true;
      window.addEventListener("devicemotion",motion,{passive:true});
      el.start.disabled=true;el.stop.disabled=false;
-     el.status.textContent="計步中。由於四層 29 點平滑 + 谷底判定，步數顯示會有約 1 秒以上延遲，這是正常的。";
+     el.status.textContent="計步中：時間間隔固定 0.01 秒（100 Hz）。四層 29 點平滑 + 谷底判定會造成約 1 秒以上延遲，這是正常的。";
    }
  }catch(err){
    el.status.textContent="啟動失敗："+(err?.message||String(err));
