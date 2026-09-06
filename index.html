@@ -25,7 +25,7 @@ canvas{display:block;width:100%;height:300px;background:#fff;border:1px solid va
 </head>
 <body><div class="wrap">
 <h1>Z軸旋轉計步器</h1>
-<div class="sub">依照「Z軸旋轉計步器.xls」重寫。依你的實機比對結果，加速度 X/Y/Z 預設全部反號後對齊 phyphox；Gyro X/Y/Z 仍依序對應 Safari 的 beta/gamma/alpha，匯出單位為 rad/s。</div>
+<div class="sub">依照「Z軸旋轉計步器.xls」重寫。依你的實機比對結果，加速度 X/Y/Z 預設全部反號後對齊 phyphox；Gyro X/Y/Z 依目前 W3C DeviceMotionEvent.rotationRate 規範改為 alpha/beta/gamma，並採右手定則；匯出單位為 rad/s。</div>
 
 <div class="card">
   <div class="actions">
@@ -92,6 +92,13 @@ canvas{display:block;width:100%;height:300px;background:#fff;border:1px solid va
   <div class="note" style="margin-top:10px">
     原 Excel 的 U～Y 欄是連續 <b>5 層 14 點平均</b>。Z 欄要求平滑曲線連續上升 5 段、再連續下降 5 段，且峰值相對 5 點前至少高 <b>0.1 m/s²</b> 才計為一步。
   </div>
+</div>
+
+<div class="card note">
+  <b>陀螺儀右手定則：</b>
+  此版使用 <b>Gyro X = alpha、Gyro Y = beta、Gyro Z = gamma</b>。
+  +X 為螢幕向右、+Y 為手機頂端、+Z 為垂直螢幕向外；正角速度依右手定則。
+  若和你的 phyphox 實機數值正負相反，仍可用上方各 Gyro 軸的「反轉」選項校正。
 </div>
 
 <div class="card note">
@@ -222,14 +229,15 @@ function motion(ev){
 
   // phyphox / 手機標準座標：
   // +X = 螢幕向右；+Y = 手機頂端方向；+Z = 垂直螢幕向外。
-  // Safari rotationRate：beta = X、gamma = Y、alpha = Z，原單位 deg/s。
+  // W3C DeviceMotionEvent.rotationRate：alpha = X、beta = Y、gamma = Z，原單位 deg/s。
+  // 正方向採右手定則。
   // 下方 sign 只在實機與 phyphox 正負號不一致時使用。
   const ax=finite(a.x)*Number(E.axSign.value);
   const ay=finite(a.y)*Number(E.aySign.value);
   const az=finite(a.z)*Number(E.azSign.value);
-  const gx=finite(rr.beta)*Math.PI/180*Number(E.gxSign.value);
-  const gy=finite(rr.gamma)*Math.PI/180*Number(E.gySign.value);
-  const gz=finite(rr.alpha)*Math.PI/180*Number(E.gzSign.value);
+  const gx=finite(rr.alpha)*Math.PI/180*Number(E.gxSign.value);
+  const gy=finite(rr.beta)*Math.PI/180*Number(E.gySign.value);
+  const gz=finite(rr.gamma)*Math.PI/180*Number(E.gzSign.value);
 
   E.axLive.textContent=ax.toFixed(3);
   E.ayLive.textContent=ay.toFixed(3);
