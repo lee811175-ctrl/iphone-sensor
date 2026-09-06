@@ -20,12 +20,12 @@ canvas{display:block;width:100%;height:300px;background:#fff;border:1px solid va
 .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}.sw{width:11px;height:3px;display:inline-block;margin-right:5px;vertical-align:middle}
 .raw{background:#9aa0a6}.rot{background:#34c759}.flt{background:#007aff}.step{background:#ff3b30;height:10px;width:10px;border-radius:50%}
 .params{display:grid;grid-template-columns:1fr 1fr;gap:10px}label{font-size:13px;color:var(--muted)}input{width:100%;margin-top:5px;min-height:42px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:16px}
-@media(max-width:650px){.actions,.stats{grid-template-columns:1fr 1fr}.params{grid-template-columns:1fr}canvas{height:245px}}
+.axisgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.axisitem{background:#f5f5f7;border-radius:12px;padding:10px}.axisitem select{width:100%;margin-top:6px;min-height:38px;border:1px solid var(--line);border-radius:9px;background:white;font-size:15px}.axisvals{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.axisval{font-variant-numeric:tabular-nums;font-size:14px}.axisval b{display:block;font-size:11px;color:var(--muted);margin-bottom:3px}@media(max-width:650px){.actions,.stats,.axisgrid,.axisvals{grid-template-columns:1fr 1fr}.params{grid-template-columns:1fr}canvas{height:245px}}
 </style>
 </head>
 <body><div class="wrap">
 <h1>Z軸旋轉計步器</h1>
-<div class="sub">依照「Z軸旋轉計步器.xls」重寫：利用陀螺儀逐步旋轉初始 Z 軸，再把三軸加速度投影到旋轉後的 Z 軸，接著做 5 層 14 點平均與峰值計步。</div>
+<div class="sub">依照「Z軸旋轉計步器.xls」重寫，並把原始感測器欄位明確對齊 phyphox：+X 向螢幕右、+Y 向手機頂端、+Z 垂直螢幕向外。Gyro X/Y/Z 依序對應 Safari 的 beta/gamma/alpha，匯出單位為 rad/s。</div>
 
 <div class="card">
   <div class="actions">
@@ -56,6 +56,30 @@ canvas{display:block;width:100%;height:300px;background:#fff;border:1px solid va
 </div>
 
 <div class="card">
+  <div style="font-weight:700;margin-bottom:6px">phyphox 座標對照</div>
+  <div class="note">
+    預設使用 phyphox 的手機座標：<b>+X 向右、+Y 向手機頂端、+Z 垂直螢幕向外</b>。
+    若你的 iPhone / Safari 實測某一軸正負號和 phyphox 相反，可在下方只翻轉該軸；匯出的 CSV 也會使用修正後的值。
+  </div>
+  <div class="axisgrid" style="margin-top:10px">
+    <div class="axisitem"><b>加速度 X</b><select id="axSign"><option value="1">+X 不反轉</option><option value="-1">−X 反轉</option></select></div>
+    <div class="axisitem"><b>加速度 Y</b><select id="aySign"><option value="1">+Y 不反轉</option><option value="-1">−Y 反轉</option></select></div>
+    <div class="axisitem"><b>加速度 Z</b><select id="azSign"><option value="1">+Z 不反轉</option><option value="-1">−Z 反轉</option></select></div>
+    <div class="axisitem"><b>陀螺儀 X</b><select id="gxSign"><option value="1">+X 不反轉</option><option value="-1">−X 反轉</option></select></div>
+    <div class="axisitem"><b>陀螺儀 Y</b><select id="gySign"><option value="1">+Y 不反轉</option><option value="-1">−Y 反轉</option></select></div>
+    <div class="axisitem"><b>陀螺儀 Z</b><select id="gzSign"><option value="1">+Z 不反轉</option><option value="-1">−Z 反轉</option></select></div>
+  </div>
+  <div class="axisvals">
+    <div class="axisval"><b>Accel X with g</b><span id="axLive">0.000</span></div>
+    <div class="axisval"><b>Accel Y with g</b><span id="ayLive">0.000</span></div>
+    <div class="axisval"><b>Accel Z with g</b><span id="azLive">0.000</span></div>
+    <div class="axisval"><b>Gyro X rad/s</b><span id="gxLive">0.000</span></div>
+    <div class="axisval"><b>Gyro Y rad/s</b><span id="gyLive">0.000</span></div>
+    <div class="axisval"><b>Gyro Z rad/s</b><span id="gzLive">0.000</span></div>
+  </div>
+</div>
+
+<div class="card">
   <div style="font-weight:700;margin-bottom:10px">Excel 參數</div>
   <div class="params">
     <label>每層平均點數
@@ -71,7 +95,7 @@ canvas{display:block;width:100%;height:300px;background:#fff;border:1px solid va
 </div>
 
 <div class="card note">
-  <b>Z 軸旋轉：</b>初始方向設為 (0,0,1)。每筆利用陀螺儀角速度乘上時間間隔得到 Δθx、Δθy、Δθz，再依 Excel 的 X→Y→Z 旋轉順序更新方向向量，最後計算
+  <b>Z 軸旋轉：</b>輸入的 Acceleration X/Y/Z 與 Gyroscope X/Y/Z 會先依上方 phyphox 座標設定修正，再進入原 Excel 演算法。初始方向設為 (0,0,1)。每筆利用陀螺儀角速度乘上時間間隔得到 Δθx、Δθy、Δθz，再依 Excel 的 X→Y→Z 旋轉順序更新方向向量，最後計算
   <b>a<sub>Zrot</sub> = ax·Q + ay·R + az·S</b>。
 </div>
 </div>
@@ -81,7 +105,9 @@ canvas{display:block;width:100%;height:300px;background:#fff;border:1px solid va
 "use strict";
 const $=id=>document.getElementById(id);
 const E={start:$("start"),stop:$("stop"),cal:$("cal"),csv:$("csv"),status:$("status"),
-steps:$("steps"),rz:$("rz"),sm:$("sm"),hz:$("hz"),chart:$("chart"),win:$("window"),thr:$("threshold")};
+steps:$("steps"),rz:$("rz"),sm:$("sm"),hz:$("hz"),chart:$("chart"),win:$("window"),thr:$("threshold"),
+axSign:$("axSign"),aySign:$("aySign"),azSign:$("azSign"),gxSign:$("gxSign"),gySign:$("gySign"),gzSign:$("gzSign"),
+axLive:$("axLive"),ayLive:$("ayLive"),azLive:$("azLive"),gxLive:$("gxLive"),gyLive:$("gyLive"),gzLive:$("gzLive")};
 
 let running=false,lastT=null,hzBuf=[],steps=0;
 let axis={q:0,r:0,s:1}; // Excel Q,R,S：旋轉後 Z 軸在手機座標中的分量
@@ -194,13 +220,25 @@ function motion(ev){
   }
   lastT=now;
 
-  // Safari rotationRate 單位為 deg/s：
-  // beta = X 軸，gamma = Y 軸，alpha = Z 軸
-  const gx=finite(rr.beta)*Math.PI/180;
-  const gy=finite(rr.gamma)*Math.PI/180;
-  const gz=finite(rr.alpha)*Math.PI/180;
+  // phyphox / 手機標準座標：
+  // +X = 螢幕向右；+Y = 手機頂端方向；+Z = 垂直螢幕向外。
+  // Safari rotationRate：beta = X、gamma = Y、alpha = Z，原單位 deg/s。
+  // 下方 sign 只在實機與 phyphox 正負號不一致時使用。
+  const ax=finite(a.x)*Number(E.axSign.value);
+  const ay=finite(a.y)*Number(E.aySign.value);
+  const az=finite(a.z)*Number(E.azSign.value);
+  const gx=finite(rr.beta)*Math.PI/180*Number(E.gxSign.value);
+  const gy=finite(rr.gamma)*Math.PI/180*Number(E.gySign.value);
+  const gz=finite(rr.alpha)*Math.PI/180*Number(E.gzSign.value);
 
-  processSample(finite(a.x),finite(a.y),finite(a.z),gx,gy,gz,now,dt);
+  E.axLive.textContent=ax.toFixed(3);
+  E.ayLive.textContent=ay.toFixed(3);
+  E.azLive.textContent=az.toFixed(3);
+  E.gxLive.textContent=gx.toFixed(3);
+  E.gyLive.textContent=gy.toFixed(3);
+  E.gzLive.textContent=gz.toFixed(3);
+
+  processSample(ax,ay,az,gx,gy,gz,now,dt);
 }
 
 async function start(){
@@ -232,7 +270,7 @@ function stop(){
 
 function exportCSV(){
   if(!rows.length){E.status.textContent="目前沒有資料可匯出。";return;}
-  const head=["time_s","ax","ay","az","gyro_x_rad_s","gyro_y_rad_s","gyro_z_rad_s","dt",
+  const head=["Time_s","Acceleration_X_with_g_m_s2","Acceleration_Y_with_g_m_s2","Acceleration_Z_with_g_m_s2","Gyroscope_X_rad_s","Gyroscope_Y_rad_s","Gyroscope_Z_rad_s","dt_s",
               "Q","R","S","rotated_Z","smooth1","smooth2","smooth3","smooth4","smooth5","step_count"];
   const lines=rows.map(r=>[
     r.t,r.ax,r.ay,r.az,r.gx,r.gy,r.gz,r.dt,r.q,r.r,r.s,r.rz,r.u,r.v,r.w,r.x,r.y,r.step
