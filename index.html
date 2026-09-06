@@ -25,7 +25,7 @@ canvas{display:block;width:100%;height:300px;background:#fff;border:1px solid va
 </head>
 <body><div class="wrap">
 <h1>Z軸旋轉計步器</h1>
-<div class="sub">依照「Z軸旋轉計步器.xls」重寫，並把原始感測器欄位明確對齊 phyphox：+X 向螢幕右、+Y 向手機頂端、+Z 垂直螢幕向外。Gyro X/Y/Z 依序對應 Safari 的 beta/gamma/alpha，匯出單位為 rad/s。</div>
+<div class="sub">依照「Z軸旋轉計步器.xls」重寫。依你的實機比對結果，加速度 X/Y/Z 預設全部反號後對齊 phyphox；Gyro X/Y/Z 仍依序對應 Safari 的 beta/gamma/alpha，匯出單位為 rad/s。</div>
 
 <div class="card">
   <div class="actions">
@@ -58,13 +58,13 @@ canvas{display:block;width:100%;height:300px;background:#fff;border:1px solid va
 <div class="card">
   <div style="font-weight:700;margin-bottom:6px">phyphox 座標對照</div>
   <div class="note">
-    預設使用 phyphox 的手機座標：<b>+X 向右、+Y 向手機頂端、+Z 垂直螢幕向外</b>。
-    若你的 iPhone / Safari 實測某一軸正負號和 phyphox 相反，可在下方只翻轉該軸；匯出的 CSV 也會使用修正後的值。
+    依你實機比對結果，Safari 的 accelerationIncludingGravity 與 phyphox 正負號相反，因此這版預設把 <b>Acceleration X/Y/Z 全部乘上 −1</b>，使其方向與 phyphox 一致。
+    若之後換不同裝置發現某一軸不同，仍可在下方切換該軸；匯出的 CSV 與 Z 軸旋轉演算法都會使用修正後的值。
   </div>
   <div class="axisgrid" style="margin-top:10px">
-    <div class="axisitem"><b>加速度 X</b><select id="axSign"><option value="1">+X 不反轉</option><option value="-1">−X 反轉</option></select></div>
-    <div class="axisitem"><b>加速度 Y</b><select id="aySign"><option value="1">+Y 不反轉</option><option value="-1">−Y 反轉</option></select></div>
-    <div class="axisitem"><b>加速度 Z</b><select id="azSign"><option value="1">+Z 不反轉</option><option value="-1">−Z 反轉</option></select></div>
+    <div class="axisitem"><b>加速度 X</b><select id="axSign"><option value="-1" selected>−X 反轉（phyphox）</option><option value="1">+X 不反轉</option></select></div>
+    <div class="axisitem"><b>加速度 Y</b><select id="aySign"><option value="-1" selected>−Y 反轉（phyphox）</option><option value="1">+Y 不反轉</option></select></div>
+    <div class="axisitem"><b>加速度 Z</b><select id="azSign"><option value="-1" selected>−Z 反轉（phyphox）</option><option value="1">+Z 不反轉</option></select></div>
     <div class="axisitem"><b>陀螺儀 X</b><select id="gxSign"><option value="1">+X 不反轉</option><option value="-1">−X 反轉</option></select></div>
     <div class="axisitem"><b>陀螺儀 Y</b><select id="gySign"><option value="1">+Y 不反轉</option><option value="-1">−Y 反轉</option></select></div>
     <div class="axisitem"><b>陀螺儀 Z</b><select id="gzSign"><option value="1">+Z 不反轉</option><option value="-1">−Z 反轉</option></select></div>
