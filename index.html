@@ -34,7 +34,7 @@ canvas{display:block;width:100%;background:#fff;border:1px solid #ddd;border-rad
 </style>
 </head>
 <body>
-<h1>行走導航－依你的 Excel 原算法</h1>
+<h1>行走導航－依你的 Excel 原算法（重新核對版）</h1>
 <div class="sub">沒有加入高通濾波。Z 加速度依原檔使用「多層置中移動平均」；Z 軸角速度依原檔使用一階低通＋兩層移動平均。</div>
 
 <div class="card">
@@ -91,8 +91,8 @@ canvas{display:block;width:100%;background:#fff;border:1px solid #ddd;border-rad
   <div class="grid">
     <div class="box">
       <label>低通截止頻率 fc (Hz)</label>
-      <input id="gyroFc" type="number" value="1000" min="0.01" step="1">
-      <small>依 Excel AL4，原始設定為 1000 Hz。</small>
+      <input id="gyroFc" type="number" value="0.10" min="0.01" step="0.01">
+      <small>依你重新上傳的 Excel：AL4 = 0.1 Hz。</small>
     </div>
     <div class="box">
       <label>後續平均點數</label>
@@ -106,9 +106,9 @@ canvas{display:block;width:100%;background:#fff;border:1px solid #ddd;border-rad
     </div>
   </div>
   <div class="eq">τ = 1/(2πfc)</div>
-  <div class="eq">α = τ/(τ + Δt)</div>
+  <div class="eq">αLP = Δt/(τ + Δt)</div>
   <div class="eq">AB[n] = AB[n−1] + α × (AA[n] − AB[n−1])</div>
-  <div class="note">上式刻意照你的 Excel AL6 與 AB 欄公式實作，不改成一般教科書常見的另一種 α 定義。</div>
+  <div class="note">上式刻意完全照你重新上傳的 Excel：AL6 = Δt/(τ+Δt)，AB[n] = AB[n−1] + αLP×(AA[n]−AB[n−1])。</div>
 </div>
 
 <div class="card">
@@ -228,7 +228,7 @@ function onMotion(ev){
  const aa=gx*zAxis.x+gy*zAxis.y+gz*zAxis.z;
 
  // AB欄：照 Excel 低通公式
- const fc=Math.max(.0001,n(E.gyroFc,1000)),tau=1/(2*Math.PI*fc),alpha=tau/(tau+dt);
+ const fc=Math.max(.0001,n(E.gyroFc,0.1)),tau=1/(2*Math.PI*fc),alpha=dt/(tau+dt);
  if(gyroLP===null)gyroLP=aa;
  else gyroLP=gyroLP+alpha*(aa-gyroLP);
 
