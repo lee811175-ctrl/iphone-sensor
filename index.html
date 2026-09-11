@@ -3,567 +3,310 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>iPhone PDR：可調濾波與計步條件</title>
+<title>iPhone PDR－依 Excel 原算法</title>
 <style>
-:root{
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;
-  color:#111;background:#f5f5f7
-}
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif;color:#111;background:#f5f5f7}
 *{box-sizing:border-box}
-body{margin:0 auto;padding:16px;max-width:980px}
-h1{font-size:22px;margin:4px 0 6px}
-h2{font-size:17px;margin:0 0 10px}
-.subtitle{font-size:13px;color:#666;margin-bottom:12px}
+body{max-width:980px;margin:auto;padding:16px}
+h1{font-size:22px;margin:4px 0 6px} h2{font-size:17px;margin:0 0 10px}
+.sub,.note{font-size:13px;color:#5d5d63;line-height:1.65}
 .card{background:#fff;border-radius:16px;padding:14px;margin:10px 0;box-shadow:0 2px 10px #00000010}
-.row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
-button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:700;background:#111;color:#fff}
-button.secondary{background:#e9e9ee;color:#111}
-button:disabled{opacity:.45}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{border:0;border-radius:11px;padding:11px 15px;font-size:16px;font-weight:700;background:#111;color:#fff}
+button.alt{background:#e9e9ee;color:#111} button:disabled{opacity:.45}
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.kpi{background:#f5f5f7;border-radius:12px;padding:12px;text-align:center}
-.kpi b{display:block;font-size:25px}
-.kpi span{font-size:12px;color:#666}
-.settings{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.setting{background:#f7f7f9;border-radius:12px;padding:11px}
-.setting label{display:block;font-size:13px;font-weight:700;margin-bottom:5px}
-.setting small{display:block;color:#666;font-size:11px;margin-top:5px;line-height:1.35}
-input[type=number]{
-  width:100%;padding:9px;border:1px solid #ccc;border-radius:8px;font-size:16px;background:#fff
-}
-canvas{width:100%;display:block;background:#fff;border:1px solid #ddd;border-radius:12px}
-.note{font-size:13px;color:#555;line-height:1.65}
+.kpi{background:#f5f5f7;border-radius:12px;padding:11px;text-align:center}
+.kpi b{display:block;font-size:24px}.kpi span{font-size:12px;color:#666}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.box{background:#f7f7f9;border-radius:11px;padding:10px}
+.box label{display:block;font-weight:700;font-size:13px;margin-bottom:5px}
+.box small{display:block;color:#666;font-size:11px;line-height:1.4;margin-top:5px}
+input{width:100%;padding:8px;border:1px solid #ccc;border-radius:8px;font-size:16px}
+.eq{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:#f7f7f9;border-radius:8px;padding:8px;margin-top:6px;overflow-wrap:anywhere}
+canvas{display:block;width:100%;background:#fff;border:1px solid #ddd;border-radius:12px}
+.badge{font-size:12px;background:#efeff4;border-radius:999px;padding:3px 8px;margin-left:5px}
 .status{font-size:14px;font-weight:700}
-.badge{display:inline-block;padding:3px 8px;border-radius:999px;background:#efeff4;font-size:12px;margin-left:6px}
-.eq{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;background:#f7f7f9;padding:9px;border-radius:8px;overflow-wrap:anywhere}
-.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#555;margin:4px 0 8px}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
-.line{display:inline-block;width:18px;height:3px;margin-right:5px;vertical-align:middle}
-@media(max-width:720px){
-  .kpis{grid-template-columns:repeat(2,1fr)}
-  .settings{grid-template-columns:repeat(2,1fr)}
-}
-@media(max-width:460px){.settings{grid-template-columns:1fr}}
+.legend{display:flex;gap:15px;flex-wrap:wrap;font-size:12px;color:#555;margin:5px 0 8px}
+.line{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:4px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;vertical-align:middle;margin-right:4px}
+@media(max-width:700px){.grid{grid-template-columns:repeat(2,1fr)}.kpis{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:440px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-
-<h1>iPhone 行走導航：可調濾波＋計步＋XY</h1>
-<div class="subtitle">依你上傳的「自動偵測Z軸座標加上Z軸慮波.xlsx」架構製作；可直接調整 Z 軸濾波與步數判定條件。</div>
+<h1>行走導航－依你的 Excel 原算法</h1>
+<div class="sub">沒有加入高通濾波。Z 加速度依原檔使用「多層置中移動平均」；Z 軸角速度依原檔使用一階低通＋兩層移動平均。</div>
 
 <div class="card">
   <div class="row">
     <button id="start">開始量測</button>
-    <button id="stop" class="secondary" disabled>停止</button>
-    <button id="reset" class="secondary">重設</button>
-    <button id="csv" class="secondary">匯出 CSV</button>
+    <button id="stop" class="alt" disabled>停止</button>
+    <button id="reset" class="alt">重設</button>
+    <button id="csv" class="alt">匯出 CSV</button>
   </div>
-  <div style="height:8px"></div>
-  <div id="status" class="status">尚未開始</div>
+  <div style="height:8px"></div><div id="status" class="status">尚未開始</div>
 </div>
 
 <div class="card">
   <div class="kpis">
     <div class="kpi"><b id="steps">0</b><span>步數</span></div>
-    <div class="kpi"><b id="xpos">0.00</b><span>X (m)</span></div>
-    <div class="kpi"><b id="ypos">0.00</b><span>Y (m)</span></div>
+    <div class="kpi"><b id="x">0.00</b><span>X (m)</span></div>
+    <div class="kpi"><b id="y">0.00</b><span>Y (m)</span></div>
     <div class="kpi"><b id="hz">0</b><span>感測頻率 (Hz)</span></div>
   </div>
 </div>
 
 <div class="card">
-  <h2>濾波條件設定</h2>
-  <div class="settings">
-    <div class="setting">
-      <label>Z 高通截止頻率 HPF (Hz)</label>
-      <input id="hpFc" type="number" value="0.70" min="0.05" max="10" step="0.05">
-      <small>去除重力殘差與慢速漂移。建議步行先試 0.5～0.8 Hz。</small>
+  <h2>Z 加速度濾波條件</h2>
+  <div class="grid">
+    <div class="box">
+      <label>每層平均點數</label>
+      <input id="zWin" type="number" value="13" min="3" max="51" step="2">
+      <small>Excel 穩定區段為 13 點置中平均。</small>
     </div>
-    <div class="setting">
-      <label>Z 低通截止頻率 LPF (Hz)</label>
-      <input id="lpFc" type="number" value="3.00" min="0.2" max="20" step="0.1">
-      <small>去除高頻晃動。一般步行可先試 2.5～3.5 Hz。</small>
-    </div>
-    <div class="setting">
-      <label>航向角速度低通 (Hz)</label>
-      <input id="gyroFc" type="number" value="8.00" min="0.2" max="50" step="0.5">
-      <small>對投影後 Z 軸角速度做一階低通，再積分航向。</small>
+    <div class="box">
+      <label>平滑層數</label>
+      <input id="zStages" type="number" value="4" min="1" max="6" step="1">
+      <small>Excel U→V→W→X，共 4 層。</small>
     </div>
   </div>
-
-  <div class="note" style="margin-top:10px">
-    Z 軸濾波流程：
-  </div>
-  <div class="eq">旋轉後 Z → 高通 HPF → 低通 LPF → 計步判定</div>
-  <div class="eq" style="margin-top:6px">HP[n] = αHP × (HP[n−1] + Z[n] − Z[n−1])</div>
-  <div class="eq" style="margin-top:6px">LP[n] = LP[n−1] + αLP × (HP[n] − LP[n−1])</div>
+  <div class="eq">旋轉後 Z（T） → 平均1（U） → 平均2（V） → 平均3（W） → 最後 Z（X）</div>
+  <div class="note">這裡完全不使用 HPF。每一層都是移動平均；即時版會等候足夠的未來樣本後，輸出置中值，因此圖形會有必要的延遲。</div>
 </div>
 
 <div class="card">
-  <h2>計步條件設定</h2>
-  <div class="settings">
-    <div class="setting">
-      <label>峰值前連續上升次數</label>
-      <input id="riseCount" type="number" value="4" min="1" max="10" step="1">
-      <small>Excel 原本相當於 4 次連續上升。</small>
-    </div>
-    <div class="setting">
-      <label>峰值後連續下降次數</label>
-      <input id="fallCount" type="number" value="4" min="1" max="10" step="1">
-      <small>Excel 原本相當於 4 次連續下降。</small>
-    </div>
-    <div class="setting">
-      <label>峰值振幅門檻 (m/s²)</label>
-      <input id="ampThreshold" type="number" value="0.08" min="0" max="20" step="0.01">
-      <small>峰值 − 最後一個下降點，必須大於此值。</small>
-    </div>
-    <div class="setting">
-      <label>最短步伐間隔 (s)</label>
-      <input id="minInterval" type="number" value="0.25" min="0" max="2" step="0.05">
-      <small>防止同一次晃動被重複計步。</small>
-    </div>
-    <div class="setting">
-      <label>步距 (m)</label>
-      <input id="stepLen" type="number" value="0.30" min="0.05" max="2" step="0.01">
-      <small>Excel AJ2 原始設定為 0.30 m。</small>
-    </div>
+  <h2>計步條件</h2>
+  <div class="grid">
+    <div class="box"><label>峰值前連續上升次數</label><input id="rise" type="number" value="4" min="1" max="10"><small>Excel 原式＝4。</small></div>
+    <div class="box"><label>峰值後連續下降次數</label><input id="fall" type="number" value="4" min="1" max="10"><small>Excel 原式＝4。</small></div>
+    <div class="box"><label>振幅門檻 (m/s²)</label><input id="amp" type="number" value="0.08" min="0" step="0.01"><small>Excel 原式 X峰−X後4點 &gt; 0.08。</small></div>
+    <div class="box"><label>步距 (m)</label><input id="stepLen" type="number" value="0.30" min="0.01" max="2" step="0.01"><small>Excel AJ2＝0.30。</small></div>
   </div>
+  <div class="eq">X[n−4] &lt; X[n−3] &lt; X[n−2] &lt; X[n−1] &lt; X[n] &gt; X[n+1] &gt; X[n+2] &gt; X[n+3] &gt; X[n+4]</div>
+  <div class="eq">且 X[n] − X[n+4] &gt; 振幅門檻 → 判定 1 步</div>
+</div>
 
-  <div class="note" style="margin-top:10px">
-    例如上升＝4、下降＝4 時：
+<div class="card">
+  <h2>航向角速度濾波條件</h2>
+  <div class="grid">
+    <div class="box">
+      <label>低通截止頻率 fc (Hz)</label>
+      <input id="gyroFc" type="number" value="1000" min="0.01" step="1">
+      <small>依 Excel AL4，原始設定為 1000 Hz。</small>
+    </div>
+    <div class="box">
+      <label>後續平均點數</label>
+      <input id="gyroWin" type="number" value="22" min="2" max="100" step="1">
+      <small>Excel AC、AD 穩定區段各約 22 點。</small>
+    </div>
+    <div class="box">
+      <label>後續平均層數</label>
+      <input id="gyroStages" type="number" value="2" min="0" max="4" step="1">
+      <small>Excel AA→AB 低通後，再 AC→AD 兩層平均。</small>
+    </div>
   </div>
-  <div class="eq">x[n−4] &lt; x[n−3] &lt; x[n−2] &lt; x[n−1] &lt; x[n] &gt; x[n+1] &gt; x[n+2] &gt; x[n+3] &gt; x[n+4]</div>
+  <div class="eq">τ = 1/(2πfc)</div>
+  <div class="eq">α = τ/(τ + Δt)</div>
+  <div class="eq">AB[n] = AB[n−1] + α × (AA[n] − AB[n−1])</div>
+  <div class="note">上式刻意照你的 Excel AL6 與 AB 欄公式實作，不改成一般教科書常見的另一種 α 定義。</div>
 </div>
 
 <div class="card">
   <h2>初始 Z 軸自動偵測 <span id="zstate" class="badge">等待中</span></h2>
-  <div class="note">
-    依 Excel：使用前 49 筆 XYZ 加速度平均後正規化，得到初始 Z 方向。
-  </div>
-  <div id="zvector" class="eq" style="margin-top:7px">Z = (0.0000, 0.0000, 1.0000)</div>
+  <div class="note">照 Excel Q3:R3:S3：取前 49 筆 ax、ay、az 平均後正規化。</div>
+  <div id="zvec" class="eq">Z = (0.0000, 0.0000, 1.0000)</div>
 </div>
 
 <div class="card">
   <h2>XY 行走軌跡</h2>
-  <canvas id="xychart" width="900" height="650"></canvas>
-  <div class="note">每偵測到一步，使用目前航向角與設定步距更新 XY；XY 使用相同比例尺。</div>
+  <canvas id="xy" width="900" height="640"></canvas>
+  <div class="note">方向依 Excel：x方向 = −sin(θ)，y方向 = cos(θ)。每判定一步，以設定步距更新位置。</div>
 </div>
 
 <div class="card">
-  <h2>最後 Z 隨時間圖形</h2>
+  <h2>最後 Z 隨時間圖</h2>
   <div class="legend">
-    <span><span class="line" style="background:#999"></span>旋轉後原始 Z</span>
-    <span><span class="line" style="background:#111"></span>濾波後 Z</span>
-    <span><span class="dot" style="background:#d00"></span>判定步伐峰值</span>
+    <span><span class="line" style="background:#999"></span>旋轉後 Z（T）</span>
+    <span><span class="line" style="background:#111"></span>最後 Z（X）</span>
+    <span><span class="dot" style="background:#d00"></span>計步峰值</span>
   </div>
-  <canvas id="zchart" width="900" height="420"></canvas>
-  <div class="note">圖中黑線就是實際拿來套用計步條件的 Z 訊號。</div>
-</div>
-
-<div class="card note">
-  <b>計算架構：</b><br>
-  前 49 筆加速度平均 → 初始 Z 軸 → gyro 更新 Z 軸 → 加速度投影到 Z →
-  HPF → LPF → 峰值條件計步。<br>
-  同時將角速度投影到 Z 軸 → 低通 → 積分航向角 →
-  每一步以 ΔX = −L sinθ、ΔY = L cosθ 更新 XY。
+  <canvas id="zc" width="900" height="420"></canvas>
 </div>
 
 <script>
 const $=id=>document.getElementById(id);
-const E={
-  start:$("start"),stop:$("stop"),reset:$("reset"),csv:$("csv"),status:$("status"),
-  steps:$("steps"),xpos:$("xpos"),ypos:$("ypos"),hz:$("hz"),
-  hpFc:$("hpFc"),lpFc:$("lpFc"),gyroFc:$("gyroFc"),
-  riseCount:$("riseCount"),fallCount:$("fallCount"),ampThreshold:$("ampThreshold"),
-  minInterval:$("minInterval"),stepLen:$("stepLen"),
-  zstate:$("zstate"),zvector:$("zvector"),
-  xychart:$("xychart"),zchart:$("zchart")
-};
+const E={start:$("start"),stop:$("stop"),reset:$("reset"),csv:$("csv"),status:$("status"),
+steps:$("steps"),x:$("x"),y:$("y"),hz:$("hz"),zWin:$("zWin"),zStages:$("zStages"),
+rise:$("rise"),fall:$("fall"),amp:$("amp"),stepLen:$("stepLen"),
+gyroFc:$("gyroFc"),gyroWin:$("gyroWin"),gyroStages:$("gyroStages"),
+zstate:$("zstate"),zvec:$("zvec"),xy:$("xy"),zc:$("zc")};
 
-let running=false,startMs=0,lastMs=null,lastHzMs=0,hzCount=0;
-let zAxis={x:0,y:0,z:1},zReady=false,initAccel=[];
-let prevRotZ=null,hpPrev=0,lpPrev=0;
-let gyroLpPrev=0,heading=0;
-let posX=0,posY=0,stepCount=0,lastStepTime=-Infinity;
-let filt=[],rawZ=[],stepPeaks=[],path=[{x:0,y:0,t:0,step:0}],log=[];
+let running=false,startMs=0,lastMs=null,hzStart=0,hzN=0;
+let zAxis={x:0,y:0,z:1},zReady=false,initA=[];
+let zPipes=[],gyroPipes=[];
+let gyroLP=null,heading=0;
+let steps=0,px=0,py=0;
+let path=[{x:0,y:0,t:0,s:0}],rawZ=[],finalZ=[],peaks=[],logs=[];
 
-function num(el,def){
-  const v=Number(el.value);
-  return Number.isFinite(v)?v:def;
+function n(el,d){let v=Number(el.value);return Number.isFinite(v)?v:d}
+function norm(v){let m=Math.hypot(v.x,v.y,v.z)||1;return{x:v.x/m,y:v.y/m,z:v.z/m}}
+function mean(a,k){return a.reduce((s,o)=>s+o[k],0)/a.length}
+function rot(v,dx,dy,dz){
+ const K=v.x,L=v.y*Math.cos(dx)+v.z*Math.sin(dx),M=-v.y*Math.sin(dx)+v.z*Math.cos(dx);
+ const N=-M*Math.sin(dy)+K*Math.cos(dy),O=L,P=M*Math.cos(dy)+K*Math.sin(dy);
+ return{x:N*Math.cos(dz)+O*Math.sin(dz),y:-N*Math.sin(dz)+O*Math.cos(dz),z:P};
 }
-function normalize(v){
-  const n=Math.hypot(v.x,v.y,v.z)||1;
-  return {x:v.x/n,y:v.y/n,z:v.z/n};
+function oddWindow(){
+ let w=Math.max(3,Math.round(n(E.zWin,13)));
+ if(w%2===0)w+=1;
+ return w;
 }
-function rotateVector(v,dx,dy,dz){
-  const K=v.x;
-  const L=v.y*Math.cos(dx)+v.z*Math.sin(dx);
-  const M=-v.y*Math.sin(dx)+v.z*Math.cos(dx);
-  const N=-M*Math.sin(dy)+K*Math.cos(dy);
-  const O=L;
-  const P=M*Math.cos(dy)+K*Math.sin(dy);
-  return {
-    x:N*Math.cos(dz)+O*Math.sin(dz),
-    y:-N*Math.sin(dz)+O*Math.cos(dz),
-    z:P
-  };
+function centeredPush(pipe,p,w){
+ pipe.push(p);
+ if(pipe.length<w)return null;
+ const a=pipe.slice(-w),c=Math.floor(w/2);
+ return {t:a[c].t,v:a.reduce((s,q)=>s+q.v,0)/w,heading:a[c].heading};
 }
-function mean(arr,key){
-  return arr.reduce((s,o)=>s+o[key],0)/arr.length;
+function stagedCentered(inputP,pipes,w,stages){
+ let p=inputP;
+ for(let i=0;i<stages;i++){
+   p=centeredPush(pipes[i],p,w);
+   if(!p)return null;
+ }
+ return p;
 }
-function updateZText(){
-  E.zvector.textContent=`Z = (${zAxis.x.toFixed(4)}, ${zAxis.y.toFixed(4)}, ${zAxis.z.toFixed(4)})`;
+function ensurePipes(){
+ const zs=Math.max(1,Math.round(n(E.zStages,4)));
+ while(zPipes.length<zs)zPipes.push([]);
+ if(zPipes.length>zs)zPipes=zPipes.slice(0,zs);
+ const gs=Math.max(0,Math.round(n(E.gyroStages,2)));
+ while(gyroPipes.length<gs)gyroPipes.push([]);
+ if(gyroPipes.length>gs)gyroPipes=gyroPipes.slice(0,gs);
 }
-
-function filterZ(z,dt){
-  const hpFc=Math.max(0.001,num(E.hpFc,0.7));
-  const lpFc=Math.max(hpFc+0.01,num(E.lpFc,3.0));
-
-  if(prevRotZ===null){
-    prevRotZ=z;
-    hpPrev=0;
-    lpPrev=0;
-    return 0;
-  }
-
-  const tauHP=1/(2*Math.PI*hpFc);
-  const alphaHP=tauHP/(tauHP+dt);
-  const hp=alphaHP*(hpPrev + z - prevRotZ);
-
-  const tauLP=1/(2*Math.PI*lpFc);
-  const alphaLP=dt/(tauLP+dt);
-  const lp=lpPrev + alphaLP*(hp-lpPrev);
-
-  prevRotZ=z;
-  hpPrev=hp;
-  lpPrev=lp;
-  return lp;
+function stepDetect(){
+ const r=Math.max(1,Math.round(n(E.rise,4))),f=Math.max(1,Math.round(n(E.fall,4)));
+ const need=r+1+f;if(finalZ.length<need)return;
+ const q=finalZ.slice(-need),pk=r;let up=true,down=true;
+ for(let i=0;i<r;i++)if(!(q[i].v<q[i+1].v)){up=false;break}
+ for(let i=pk;i<pk+f;i++)if(!(q[i].v>q[i+1].v)){down=false;break}
+ const amp=q[pk].v-q[q.length-1].v;
+ if(up&&down&&amp>Math.max(0,n(E.amp,.08))){
+   const p=q[pk],L=Math.max(.001,n(E.stepLen,.30));
+   steps++; px+=-Math.sin(p.heading)*L; py+=Math.cos(p.heading)*L;
+   path.push({x:px,y:py,t:p.t,s:steps}); peaks.push({t:p.t,v:p.v});
+   E.steps.textContent=steps;E.x.textContent=px.toFixed(2);E.y.textContent=py.toFixed(2);drawXY();
+ }
 }
-
-function filterGyro(w,dt){
-  const fc=Math.max(0.001,num(E.gyroFc,8));
-  const tau=1/(2*Math.PI*fc);
-  const a=dt/(tau+dt);
-  gyroLpPrev=gyroLpPrev+a*(w-gyroLpPrev);
-  return gyroLpPrev;
-}
-
-function detectStep(){
-  const rise=Math.max(1,Math.round(num(E.riseCount,4)));
-  const fall=Math.max(1,Math.round(num(E.fallCount,4)));
-  const needed=rise+1+fall;
-  if(filt.length<needed)return;
-
-  const q=filt.slice(-needed);
-  const peakIndex=rise;
-
-  let up=true;
-  for(let i=0;i<rise;i++){
-    if(!(q[i].v<q[i+1].v)){up=false;break;}
-  }
-
-  let down=true;
-  for(let i=peakIndex;i<peakIndex+fall;i++){
-    if(!(q[i].v>q[i+1].v)){down=false;break;}
-  }
-
-  const threshold=Math.max(0,num(E.ampThreshold,0.08));
-  const amp=q[peakIndex].v-q[q.length-1].v;
-  const peak=q[peakIndex];
-
-  const minDt=Math.max(0,num(E.minInterval,0.25));
-  const intervalOK=(peak.t-lastStepTime)>=minDt;
-
-  if(up&&down&&amp>threshold&&intervalOK){
-    lastStepTime=peak.t;
-    stepCount++;
-
-    const L=Math.max(0.01,num(E.stepLen,0.30));
-    posX += -Math.sin(peak.heading)*L;
-    posY +=  Math.cos(peak.heading)*L;
-
-    path.push({x:posX,y:posY,t:peak.t,step:stepCount});
-    stepPeaks.push({t:peak.t,v:peak.v,step:stepCount});
-
-    E.steps.textContent=stepCount;
-    E.xpos.textContent=posX.toFixed(2);
-    E.ypos.textContent=posY.toFixed(2);
-    drawXY();
-  }
-}
-
-function onMotion(ev){
-  if(!running)return;
-
-  const now=performance.now();
-  if(!startMs)startMs=now;
-  const t=(now-startMs)/1000;
-
-  let dt=lastMs===null?0:(now-lastMs)/1000;
-  lastMs=now;
-  if(!(dt>0&&dt<0.2))dt=0.016;
-
-  const a=ev.accelerationIncludingGravity||{};
-  const r=ev.rotationRate||{};
-
-  // 依你之前與 phyphox 的實機比對：加速度三軸反號
-  const ax=-(Number(a.x)||0);
-  const ay=-(Number(a.y)||0);
-  const az=-(Number(a.z)||0);
-
-  // rotationRate：alpha→X、beta→Y、gamma→Z；deg/s → rad/s
-  const gx=(Number(r.alpha)||0)*Math.PI/180;
-  const gy=(Number(r.beta)||0)*Math.PI/180;
-  const gz=(Number(r.gamma)||0)*Math.PI/180;
-
-  if(!zReady){
-    initAccel.push({ax,ay,az});
-    E.zstate.textContent=`校正中 ${initAccel.length}/49`;
-
-    if(initAccel.length>=49){
-      zAxis=normalize({
-        x:mean(initAccel,"ax"),
-        y:mean(initAccel,"ay"),
-        z:mean(initAccel,"az")
-      });
-      zReady=true;
-      E.zstate.textContent="完成";
-      E.status.textContent="量測中…";
-      updateZText();
-    }
-    countHz(now);
-    return;
-  }
-
-  zAxis=normalize(rotateVector(zAxis,gx*dt,gy*dt,gz*dt));
-  updateZText();
-
-  const rotZ=ax*zAxis.x+ay*zAxis.y+az*zAxis.z;
-  const wZ=gx*zAxis.x+gy*zAxis.y+gz*zAxis.z;
-  const wZF=filterGyro(wZ,dt);
-  heading += wZF*dt;
-
-  const zFilt=filterZ(rotZ,dt);
-
-  rawZ.push({t,v:rotZ});
-  filt.push({t,v:zFilt,heading});
-  if(rawZ.length>20000)rawZ.shift();
-  if(filt.length>20000)filt.shift();
-
-  detectStep();
-
-  log.push({
-    t,ax,ay,az,gx,gy,gz,
-    zx:zAxis.x,zy:zAxis.y,zz:zAxis.z,
-    rotZ,zFilt,wZ,wZF,heading,
-    steps:stepCount,x:posX,y:posY
-  });
-
-  if(filt.length%4===0)drawZ();
-  countHz(now);
-}
-
 function countHz(now){
-  hzCount++;
-  if(now-lastHzMs>=1000){
-    E.hz.textContent=Math.round(hzCount*1000/(now-lastHzMs));
-    hzCount=0;
-    lastHzMs=now;
-  }
+ hzN++; if(now-hzStart>=1000){E.hz.textContent=Math.round(hzN*1000/(now-hzStart));hzN=0;hzStart=now}
 }
+function onMotion(ev){
+ if(!running)return;
+ const now=performance.now(),t=(now-startMs)/1000;
+ let dt=lastMs===null?.016:(now-lastMs)/1000; lastMs=now;if(!(dt>0&&dt<.2))dt=.016;
+ const a=ev.accelerationIncludingGravity||{},r=ev.rotationRate||{};
+ const ax=-(Number(a.x)||0),ay=-(Number(a.y)||0),az=-(Number(a.z)||0);
+ const gx=(Number(r.alpha)||0)*Math.PI/180,gy=(Number(r.beta)||0)*Math.PI/180,gz=(Number(r.gamma)||0)*Math.PI/180;
 
+ if(!zReady){
+   initA.push({ax,ay,az});E.zstate.textContent=`校正中 ${initA.length}/49`;
+   if(initA.length>=49){
+     zAxis=norm({x:mean(initA,"ax"),y:mean(initA,"ay"),z:mean(initA,"az")});
+     zReady=true;E.zstate.textContent="完成";E.status.textContent="量測中…";
+     E.zvec.textContent=`Z = (${zAxis.x.toFixed(4)}, ${zAxis.y.toFixed(4)}, ${zAxis.z.toFixed(4)})`;
+   }
+   countHz(now);return;
+ }
+
+ zAxis=norm(rot(zAxis,gx*dt,gy*dt,gz*dt));
+ E.zvec.textContent=`Z = (${zAxis.x.toFixed(4)}, ${zAxis.y.toFixed(4)}, ${zAxis.z.toFixed(4)})`;
+
+ // T欄：旋轉後 Z 加速度
+ const rz=ax*zAxis.x+ay*zAxis.y+az*zAxis.z;
+
+ // AA欄：旋轉後 Z 軸角速度
+ const aa=gx*zAxis.x+gy*zAxis.y+gz*zAxis.z;
+
+ // AB欄：照 Excel 低通公式
+ const fc=Math.max(.0001,n(E.gyroFc,1000)),tau=1/(2*Math.PI*fc),alpha=tau/(tau+dt);
+ if(gyroLP===null)gyroLP=aa;
+ else gyroLP=gyroLP+alpha*(aa-gyroLP);
+
+ ensurePipes();
+ let headingRate={t,v:gyroLP,heading:0};
+ const gw=Math.max(2,Math.round(n(E.gyroWin,22)));
+ for(let i=0;i<gyroPipes.length;i++){
+   headingRate=centeredPush(gyroPipes[i],headingRate,gw);
+   if(!headingRate)break;
+ }
+ if(headingRate)heading+=headingRate.v*dt;
+
+ // U-V-W-X：多層置中平均
+ ensurePipes();
+ const p=stagedCentered({t,v:rz,heading},zPipes,oddWindow(),Math.max(1,Math.round(n(E.zStages,4))));
+ rawZ.push({t,v:rz});
+ if(p){ finalZ.push(p);stepDetect(); }
+
+ logs.push({t,ax,ay,az,gx,gy,gz,zx:zAxis.x,zy:zAxis.y,zz:zAxis.z,rz,aa,gyroLP,heading,
+            finalZ:p?p.v:"",steps,x:px,y:py});
+ if(rawZ.length%4===0)drawZ();countHz(now);
+}
 async function start(){
-  try{
-    if(typeof DeviceMotionEvent!=="undefined" &&
-       typeof DeviceMotionEvent.requestPermission==="function"){
-      const p=await DeviceMotionEvent.requestPermission();
-      if(p!=="granted")throw new Error("未取得動作感測器權限");
-    }
-
-    resetAll();
-    running=true;
-    startMs=performance.now();
-    lastHzMs=startMs;
-    window.addEventListener("devicemotion",onMotion,{passive:true});
-    E.status.textContent="量測中：請先保持手機短暫靜止，完成前 49 筆 Z 軸校正…";
-    E.start.disabled=true;
-    E.stop.disabled=false;
-  }catch(err){
-    E.status.textContent="無法開始："+err.message;
+ try{
+  if(typeof DeviceMotionEvent!=="undefined"&&typeof DeviceMotionEvent.requestPermission==="function"){
+   if(await DeviceMotionEvent.requestPermission()!=="granted")throw Error("未取得動作感測器權限");
   }
+  resetAll();running=true;startMs=performance.now();hzStart=startMs;
+  window.addEventListener("devicemotion",onMotion,{passive:true});
+  E.status.textContent="請先保持手機靜止，收集前 49 筆資料建立 Z 軸…";E.start.disabled=true;E.stop.disabled=false;
+ }catch(e){E.status.textContent="無法開始："+e.message}
 }
-
 function stop(){
-  running=false;
-  window.removeEventListener("devicemotion",onMotion);
-  E.status.textContent=`已停止｜總步數 ${stepCount}｜終點 (${posX.toFixed(2)}, ${posY.toFixed(2)}) m`;
-  E.start.disabled=false;
-  E.stop.disabled=true;
-  drawXY();
-  drawZ();
+ running=false;window.removeEventListener("devicemotion",onMotion);
+ E.status.textContent=`已停止｜${steps} 步｜終點 (${px.toFixed(2)}, ${py.toFixed(2)}) m`;
+ E.start.disabled=false;E.stop.disabled=true;drawXY();drawZ();
 }
-
 function resetAll(){
-  running=false;startMs=0;lastMs=null;lastHzMs=0;hzCount=0;
-  zAxis={x:0,y:0,z:1};zReady=false;initAccel=[];
-  prevRotZ=null;hpPrev=0;lpPrev=0;
-  gyroLpPrev=0;heading=0;
-  posX=0;posY=0;stepCount=0;lastStepTime=-Infinity;
-  filt=[];rawZ=[];stepPeaks=[];path=[{x:0,y:0,t:0,step:0}];log=[];
-
-  E.steps.textContent="0";
-  E.xpos.textContent="0.00";
-  E.ypos.textContent="0.00";
-  E.hz.textContent="0";
-  E.status.textContent="尚未開始";
-  E.zstate.textContent="等待中";
-  E.start.disabled=false;
-  E.stop.disabled=true;
-  updateZText();
-  drawXY();
-  drawZ();
+ running=false;startMs=0;lastMs=null;hzStart=0;hzN=0;zAxis={x:0,y:0,z:1};zReady=false;initA=[];
+ zPipes=[];gyroPipes=[];gyroLP=null;heading=0;steps=0;px=0;py=0;
+ path=[{x:0,y:0,t:0,s:0}];rawZ=[];finalZ=[];peaks=[];logs=[];
+ E.steps.textContent="0";E.x.textContent="0.00";E.y.textContent="0.00";E.hz.textContent="0";
+ E.zstate.textContent="等待中";E.zvec.textContent="Z = (0.0000, 0.0000, 1.0000)";
+ E.status.textContent="尚未開始";E.start.disabled=false;E.stop.disabled=true;drawXY();drawZ();
 }
-
 function drawXY(){
-  const c=E.xychart,ctx=c.getContext("2d"),w=c.width,h=c.height,p=58;
-  ctx.clearRect(0,0,w,h);
-
-  const xs=path.map(v=>v.x),ys=path.map(v=>v.y);
-  let xmin=Math.min(0,...xs),xmax=Math.max(0,...xs);
-  let ymin=Math.min(0,...ys),ymax=Math.max(0,...ys);
-
-  let span=Math.max(xmax-xmin,ymax-ymin,1);
-  const m=span*.18;
-  xmin-=m;xmax+=m;ymin-=m;ymax+=m;
-
-  const xr=xmax-xmin,yr=ymax-ymin;
-  if(xr>yr){const d=(xr-yr)/2;ymin-=d;ymax+=d}
-  else{const d=(yr-xr)/2;xmin-=d;xmax+=d}
-
-  const X=x=>p+(x-xmin)/(xmax-xmin)*(w-2*p);
-  const Y=y=>h-p-(y-ymin)/(ymax-ymin)*(h-2*p);
-
-  ctx.strokeStyle="#ddd";ctx.lineWidth=1;
-  ctx.strokeRect(p,p,w-2*p,h-2*p);
-
-  if(xmin<=0&&xmax>=0){
-    ctx.beginPath();ctx.moveTo(X(0),p);ctx.lineTo(X(0),h-p);ctx.stroke();
-  }
-  if(ymin<=0&&ymax>=0){
-    ctx.beginPath();ctx.moveTo(p,Y(0));ctx.lineTo(w-p,Y(0));ctx.stroke();
-  }
-
-  ctx.fillStyle="#666";ctx.font="13px sans-serif";
-  ctx.fillText("X (m)",w-52,h-20);
-  ctx.fillText("Y (m)",13,24);
-
-  if(path.length){
-    ctx.strokeStyle="#111";ctx.lineWidth=3;ctx.beginPath();
-    path.forEach((v,i)=>i?ctx.lineTo(X(v.x),Y(v.y)):ctx.moveTo(X(v.x),Y(v.y)));
-    ctx.stroke();
-
-    ctx.fillStyle="#777";
-    path.forEach(v=>{
-      ctx.beginPath();ctx.arc(X(v.x),Y(v.y),2.4,0,Math.PI*2);ctx.fill();
-    });
-
-    const s=path[0],e=path[path.length-1];
-    ctx.fillStyle="#555";
-    ctx.beginPath();ctx.arc(X(s.x),Y(s.y),6,0,Math.PI*2);ctx.fill();
-    ctx.fillText("起點",X(s.x)+8,Y(s.y)-8);
-
-    ctx.fillStyle="#111";
-    ctx.beginPath();ctx.arc(X(e.x),Y(e.y),7,0,Math.PI*2);ctx.fill();
-    ctx.fillText(`目前・${stepCount} 步`,X(e.x)+9,Y(e.y)-9);
-  }
+ const c=E.xy,ctx=c.getContext("2d"),w=c.width,h=c.height,p=58;ctx.clearRect(0,0,w,h);
+ let xs=path.map(v=>v.x),ys=path.map(v=>v.y),xmin=Math.min(0,...xs),xmax=Math.max(0,...xs),ymin=Math.min(0,...ys),ymax=Math.max(0,...ys);
+ let span=Math.max(xmax-xmin,ymax-ymin,1),m=span*.18;xmin-=m;xmax+=m;ymin-=m;ymax+=m;
+ let xr=xmax-xmin,yr=ymax-ymin;if(xr>yr){let d=(xr-yr)/2;ymin-=d;ymax+=d}else{let d=(yr-xr)/2;xmin-=d;xmax+=d}
+ const X=x=>p+(x-xmin)/(xmax-xmin)*(w-2*p),Y=y=>h-p-(y-ymin)/(ymax-ymin)*(h-2*p);
+ ctx.strokeStyle="#ddd";ctx.strokeRect(p,p,w-2*p,h-2*p);
+ if(xmin<=0&&xmax>=0){ctx.beginPath();ctx.moveTo(X(0),p);ctx.lineTo(X(0),h-p);ctx.stroke()}
+ if(ymin<=0&&ymax>=0){ctx.beginPath();ctx.moveTo(p,Y(0));ctx.lineTo(w-p,Y(0));ctx.stroke()}
+ ctx.fillStyle="#666";ctx.font="13px sans-serif";ctx.fillText("X (m)",w-52,h-20);ctx.fillText("Y (m)",13,24);
+ ctx.strokeStyle="#111";ctx.lineWidth=3;ctx.beginPath();path.forEach((v,i)=>i?ctx.lineTo(X(v.x),Y(v.y)):ctx.moveTo(X(v.x),Y(v.y)));ctx.stroke();
+ const s=path[0],e=path[path.length-1];ctx.fillStyle="#555";ctx.beginPath();ctx.arc(X(s.x),Y(s.y),6,0,7);ctx.fill();ctx.fillText("起點",X(s.x)+8,Y(s.y)-8);
+ ctx.fillStyle="#111";ctx.beginPath();ctx.arc(X(e.x),Y(e.y),7,0,7);ctx.fill();ctx.fillText(`${steps}步`,X(e.x)+9,Y(e.y)-9);
 }
-
 function drawZ(){
-  const c=E.zchart,ctx=c.getContext("2d"),w=c.width,h=c.height;
-  const L=62,R=20,T=20,B=48;
-  ctx.clearRect(0,0,w,h);
-  ctx.strokeStyle="#ddd";ctx.lineWidth=1;
-  ctx.strokeRect(L,T,w-L-R,h-T-B);
-
-  if(!filt.length){
-    ctx.fillStyle="#666";ctx.font="15px sans-serif";
-    ctx.fillText("量測後將在此顯示原始 Z 與濾波後 Z。",L+18,T+40);
-    return;
-  }
-
-  const t0=filt[0].t,t1=Math.max(t0+.001,filt[filt.length-1].t);
-  const allVals=[...rawZ.map(p=>p.v),...filt.map(p=>p.v)];
-  let ymin=Math.min(...allVals),ymax=Math.max(...allVals);
-  if(ymax-ymin<1){const mid=(ymax+ymin)/2;ymin=mid-.5;ymax=mid+.5}
-  const margin=(ymax-ymin)*.08;
-  ymin-=margin;ymax+=margin;
-
-  const X=t=>L+(t-t0)/(t1-t0)*(w-L-R);
-  const Y=v=>T+(ymax-v)/(ymax-ymin)*(h-T-B);
-
-  ctx.strokeStyle="#eee";ctx.lineWidth=1;
-  for(let i=0;i<=4;i++){
-    const yy=T+(h-T-B)*i/4;
-    ctx.beginPath();ctx.moveTo(L,yy);ctx.lineTo(w-R,yy);ctx.stroke();
-    const val=ymax-(ymax-ymin)*i/4;
-    ctx.fillStyle="#666";ctx.font="12px sans-serif";
-    ctx.fillText(val.toFixed(2),5,yy+4);
-  }
-  for(let i=0;i<=5;i++){
-    const xx=L+(w-L-R)*i/5;
-    const tv=t0+(t1-t0)*i/5;
-    ctx.fillStyle="#666";ctx.fillText(tv.toFixed(1),xx-12,h-20);
-  }
-  ctx.fillText("時間 (s)",w/2-25,h-5);
-
-  // 原始旋轉 Z
-  ctx.strokeStyle="#999";ctx.lineWidth=1.2;ctx.beginPath();
-  rawZ.forEach((p,i)=>i?ctx.lineTo(X(p.t),Y(p.v)):ctx.moveTo(X(p.t),Y(p.v)));
-  ctx.stroke();
-
-  // 濾波後 Z
-  ctx.strokeStyle="#111";ctx.lineWidth=2.2;ctx.beginPath();
-  filt.forEach((p,i)=>i?ctx.lineTo(X(p.t),Y(p.v)):ctx.moveTo(X(p.t),Y(p.v)));
-  ctx.stroke();
-
-  // 步伐峰值
-  ctx.fillStyle="#d00";
-  stepPeaks.forEach(p=>{
-    ctx.beginPath();ctx.arc(X(p.t),Y(p.v),4.5,0,Math.PI*2);ctx.fill();
-  });
+ const c=E.zc,ctx=c.getContext("2d"),w=c.width,h=c.height,L=62,R=20,T=20,B=48;ctx.clearRect(0,0,w,h);ctx.strokeStyle="#ddd";ctx.strokeRect(L,T,w-L-R,h-T-B);
+ if(!rawZ.length){ctx.fillStyle="#666";ctx.font="15px sans-serif";ctx.fillText("量測後顯示旋轉後 Z 與最後 Z。",L+18,T+40);return}
+ const t0=rawZ[0].t,t1=Math.max(t0+.001,rawZ[rawZ.length-1].t),vals=[...rawZ.map(p=>p.v),...finalZ.map(p=>p.v)];
+ let ymin=Math.min(...vals),ymax=Math.max(...vals);if(ymax-ymin<1){let mid=(ymax+ymin)/2;ymin=mid-.5;ymax=mid+.5}let mg=(ymax-ymin)*.08;ymin-=mg;ymax+=mg;
+ const X=t=>L+(t-t0)/(t1-t0)*(w-L-R),Y=v=>T+(ymax-v)/(ymax-ymin)*(h-T-B);
+ ctx.strokeStyle="#eee";for(let i=0;i<=4;i++){let yy=T+(h-T-B)*i/4;ctx.beginPath();ctx.moveTo(L,yy);ctx.lineTo(w-R,yy);ctx.stroke();ctx.fillStyle="#666";ctx.font="12px sans-serif";ctx.fillText((ymax-(ymax-ymin)*i/4).toFixed(2),5,yy+4)}
+ for(let i=0;i<=5;i++){let xx=L+(w-L-R)*i/5;ctx.fillStyle="#666";ctx.fillText((t0+(t1-t0)*i/5).toFixed(1),xx-10,h-20)}ctx.fillText("時間 (s)",w/2-25,h-5);
+ ctx.strokeStyle="#999";ctx.lineWidth=1.1;ctx.beginPath();rawZ.forEach((p,i)=>i?ctx.lineTo(X(p.t),Y(p.v)):ctx.moveTo(X(p.t),Y(p.v)));ctx.stroke();
+ if(finalZ.length){ctx.strokeStyle="#111";ctx.lineWidth=2.2;ctx.beginPath();finalZ.forEach((p,i)=>i?ctx.lineTo(X(p.t),Y(p.v)):ctx.moveTo(X(p.t),Y(p.v)));ctx.stroke()}
+ ctx.fillStyle="#d00";peaks.forEach(p=>{ctx.beginPath();ctx.arc(X(p.t),Y(p.v),4.5,0,7);ctx.fill()});
 }
-
-function exportCSV(){
-  const head=[
-    "time_s","ax","ay","az","gx","gy","gz",
-    "zAxis_x","zAxis_y","zAxis_z",
-    "rotatedZ","filteredZ",
-    "gyroZ","gyroZ_filtered","heading_rad",
-    "steps","x_m","y_m"
-  ];
-  const rows=log.map(o=>[
-    o.t,o.ax,o.ay,o.az,o.gx,o.gy,o.gz,
-    o.zx,o.zy,o.zz,
-    o.rotZ,o.zFilt,o.wZ,o.wZF,o.heading,
-    o.steps,o.x,o.y
-  ]);
-  const csv=[head,...rows].map(r=>r.join(",")).join("\n");
-  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="PDR_filter_step_XY.csv";
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+function csv(){
+ const head=["time_s","ax","ay","az","gx","gy","gz","zAxis_x","zAxis_y","zAxis_z","rotatedZ_T","gyroZ_AA","gyroLowpass_AB","heading_AE","finalZ_X","steps","x_m","y_m"];
+ const rows=logs.map(o=>[o.t,o.ax,o.ay,o.az,o.gx,o.gy,o.gz,o.zx,o.zy,o.zz,o.rz,o.aa,o.gyroLP,o.heading,o.finalZ,o.steps,o.x,o.y]);
+ const text=[head,...rows].map(r=>r.join(",")).join("\n"),b=new Blob([text],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");
+ a.href=URL.createObjectURL(b);a.download="PDR_Excel_original_algorithm.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
-
-E.start.addEventListener("click",start);
-E.stop.addEventListener("click",stop);
-E.reset.addEventListener("click",()=>{
-  window.removeEventListener("devicemotion",onMotion);
-  resetAll();
-});
-E.csv.addEventListener("click",exportCSV);
-
-resetAll();
+E.start.onclick=start;E.stop.onclick=stop;E.reset.onclick=()=>{window.removeEventListener("devicemotion",onMotion);resetAll()};E.csv.onclick=csv;resetAll();
 </script>
 </body>
 </html>
