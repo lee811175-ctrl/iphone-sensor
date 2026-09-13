@@ -3,22 +3,22 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-<title>自動偵測 Z 軸－轉換後 XYZ 角速度</title>
+<title>Excel AT/AU/AV：Z軸加速度與 X/Y 轉動角度</title>
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111;background:#f5f6f8}
 body{margin:0;padding:14px}.card{background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 6px #0001}
-h1{font-size:20px;margin:0 0 8px}.sub{font-size:13px;color:#666;line-height:1.45}
-.controls{display:flex;gap:8px;flex-wrap:wrap}button{font-size:16px;padding:10px 14px;border:0;border-radius:10px;background:#111;color:#fff}button.secondary{background:#e8e9ed;color:#111}
+h1{font-size:20px;margin:0 0 8px}.sub{font-size:13px;color:#666;line-height:1.55}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}button,select{font-size:16px;padding:10px 14px;border:0;border-radius:10px}button{background:#111;color:#fff}button.secondary{background:#e8e9ed;color:#111}select{background:#eef0f3;color:#111}
 .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.stat{background:#f4f5f7;border-radius:10px;padding:9px}.k{font-size:12px;color:#666}.v{font-size:19px;font-variant-numeric:tabular-nums;margin-top:2px}
-canvas{width:100%;height:300px;display:block;border:1px solid #ddd;border-radius:10px;background:#fff}
+canvas{width:100%;height:320px;display:block;border:1px solid #ddd;border-radius:10px;background:#fff}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin-top:8px}.dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px}.x{background:#e53935}.y{background:#1e88e5}.z{background:#43a047}
 #status{font-weight:600}.ok{color:#16833b}.warn{color:#b55a00}
 </style>
 </head>
 <body>
 <div class="card">
-  <h1>自動偵測 Z 軸－轉換後 XYZ 角速度</h1>
-  <div class="sub">依 Excel 演算法：前 49 筆加速度自動建立 Z 軸，再建立互相垂直的 Y、X 軸；以陀螺儀逐筆做 X→Y→Z 座標旋轉，最後將角速度投影到轉換後 XYZ 軸。圖表固定顯示最近 3 秒。</div>
+  <h1>Excel AT/AU/AV：Z軸加速度與 X/Y 轉動角度</h1>
+  <div class="sub">依 Excel 公式呈現最後三欄：AT＝Z'=(AS−9.8)/10、AU＝θx、AV＝θy。AS 依 Excel 的四層 Z 軸平滑邏輯計算；AU、AV 分別積分轉換後 X、Y 角速度。三欄一起畫成隨時間關係圖，固定顯示最近 3 秒。</div>
 </div>
 <div class="card controls">
   <button id="startBtn">開始量測</button>
@@ -28,95 +28,58 @@ canvas{width:100%;height:300px;display:block;border:1px solid #ddd;border-radius
 </div>
 <div class="card"><div id="status" class="warn">尚未開始</div></div>
 <div class="card stats">
-  <div class="stat"><div class="k">轉換後 X 角速度</div><div class="v" id="wx">—</div></div>
-  <div class="stat"><div class="k">轉換後 Y 角速度</div><div class="v" id="wy">—</div></div>
-  <div class="stat"><div class="k">轉換後 Z 角速度</div><div class="v" id="wz">—</div></div>
+  <div class="stat"><div class="k">AT：Z' 加速度</div><div class="v" id="zprime">—</div></div>
+  <div class="stat"><div class="k">AU：θx</div><div class="v" id="thx">—</div></div>
+  <div class="stat"><div class="k">AV：θy</div><div class="v" id="thy">—</div></div>
   <div class="stat"><div class="k">取樣頻率</div><div class="v" id="hz">—</div></div>
 </div>
 <div class="card">
   <canvas id="chart"></canvas>
-  <div class="legend"><span><i class="dot x"></i>X</span><span><i class="dot y"></i>Y</span><span><i class="dot z"></i>Z</span><span>單位：rad/s</span></div>
+  <div class="legend"><span><i class="dot z"></i>AT：Z' 加速度</span><span><i class="dot x"></i>AU：θx</span><span><i class="dot y"></i>AV：θy</span></div>
 </div>
 <script>
 (() => {
 'use strict';
-const CAL_N=49, WINDOW=3.0;
-// 延續先前實機設定：Safari accelerationIncludingGravity 與 phyphox 比對後三軸反號；gyro 不反號。
+const CAL_N=49, WINDOW=3.0, MA_N=13;
 const ACC_SIGN=-1, GYRO_SIGN=1;
 let running=false, calibrated=false, cal=[], data=[];
-let t0=null,lastT=null,lastEventMs=null;
+let t0=null,lastEventMs=null;
 let zAxis=[0,0,1], yAxis=[0,1,0], xAxis=[1,0,0];
+let thetaX=0,thetaY=0;
+const ao=[], ap=[], aq=[], ar=[];
 const $=id=>document.getElementById(id), cv=$('chart'), ctx=cv.getContext('2d');
 function norm(v){const n=Math.hypot(...v)||1;return v.map(q=>q/n)}
 function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]}
 function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
-function rotate(v,dx,dy,dz){
-  const [q,r,s]=v;
-  const k=q, l=r*Math.cos(dx)+s*Math.sin(dx), m=-r*Math.sin(dx)+s*Math.cos(dx);
-  const n=-m*Math.sin(dy)+k*Math.cos(dy), o=l, p=m*Math.cos(dy)+k*Math.sin(dy);
-  return [n*Math.cos(dz)+o*Math.sin(dz), -n*Math.sin(dz)+o*Math.cos(dz), p];
-}
+function rotate(v,dx,dy,dz){const [q,r,s]=v;const k=q,l=r*Math.cos(dx)+s*Math.sin(dx),m=-r*Math.sin(dx)+s*Math.cos(dx);const n=-m*Math.sin(dy)+k*Math.cos(dy),o=l,p=m*Math.cos(dy)+k*Math.sin(dy);return [n*Math.cos(dz)+o*Math.sin(dz),-n*Math.sin(dz)+o*Math.cos(dz),p]}
+function avgCentered(arr,center,half=6){if(center-half<0||center+half>=arr.length)return null;let sum=0;for(let i=center-half;i<=center+half;i++)sum+=arr[i];return sum/(2*half+1)}
 function setStatus(s,ok=false){$('status').textContent=s;$('status').className=ok?'ok':'warn'}
-function calibrate(){
-  const mean=[0,1,2].map(j=>cal.reduce((s,v)=>s+v[j],0)/cal.length);
-  zAxis=norm(mean);
-  // Excel: 起始 Y=(0, Sz, -Sy) 正規化；X=Y×Z
-  const den=Math.hypot(zAxis[2],-zAxis[1]);
-  yAxis = den>1e-9 ? [0,zAxis[2]/den,-zAxis[1]/den] : [0,1,0];
-  xAxis=norm(cross(yAxis,zAxis)); yAxis=norm(yAxis); zAxis=norm(zAxis);
-  calibrated=true; setStatus('校正完成，正在顯示轉換後 XYZ 角速度',true);
+function calibrate(){const mean=[0,1,2].map(j=>cal.reduce((s,v)=>s+v[j],0)/cal.length);zAxis=norm(mean);const den=Math.hypot(zAxis[2],-zAxis[1]);yAxis=den>1e-9?[0,zAxis[2]/den,-zAxis[1]/den]:[0,1,0];xAxis=norm(cross(yAxis,zAxis));calibrated=true;thetaX=thetaY=0;setStatus('校正完成；依 Excel 計算 AT、AU、AV',true)}
+function onMotion(e){if(!running)return;const a=e.accelerationIncludingGravity,r=e.rotationRate;if(!a||!r)return;const nowMs=performance.now();let dt=lastEventMs==null?((e.interval||10)/1000):(nowMs-lastEventMs)/1000;lastEventMs=nowMs;if(!(dt>0&&dt<0.2))dt=(e.interval||10)/1000;if(t0==null)t0=nowMs;const t=(nowMs-t0)/1000;const acc=[ACC_SIGN*a.x,ACC_SIGN*a.y,ACC_SIGN*a.z];const gyro=[GYRO_SIGN*(r.alpha||0)*Math.PI/180,GYRO_SIGN*(r.beta||0)*Math.PI/180,GYRO_SIGN*(r.gamma||0)*Math.PI/180];
+ if(!calibrated){cal.push(acc);setStatus(`座標校正中：${cal.length}/${CAL_N}`);if(cal.length>=CAL_N)calibrate();draw();return}
+ const dx=gyro[0]*dt,dy=gyro[1]*dt,dz=gyro[2]*dt;zAxis=norm(rotate(zAxis,dx,dy,dz));yAxis=norm(rotate(yAxis,dx,dy,dz));xAxis=norm(rotate(xAxis,dx,dy,dz));
+ const wx=dot(xAxis,gyro),wy=dot(yAxis,gyro);
+ thetaX+=wx*dt; thetaY+=wy*dt; // Excel AU/AV
+ // Excel AO 使用前一筆加速度搭配本列旋轉後 Z 軸。即時版保存上一筆 acc，下一事件才完成 AO。
+ const prev=data.length?data[data.length-1]:null;
+ data.push({t,dt,wx,wy,tx:thetaX,ty:thetaY,zp:null,acc,zx:zAxis[0],zy:zAxis[1],zz:zAxis[2]});
+ if(prev){
+   const aoval=prev.acc[0]*zAxis[0]+prev.acc[1]*zAxis[1]+prev.acc[2]*zAxis[2]; ao.push(aoval);
+   // Excel 穩定區：AP/AQ/AR/AS 各為 13 點置中平均。置中平均需要未來 6 點，所以逐層延遲。
+   const i=ao.length-1;
+   const c1=i-6; if(c1>=6){const v=avgCentered(ao,c1);ap[c1]=v;}
+   const c2=c1-6; if(c2>=6 && ap[c2-6]!=null && ap[c2+6]!=null){aq[c2]=avgCentered(ap,c2);}
+   const c3=c2-6; if(c3>=6 && aq[c3-6]!=null && aq[c3+6]!=null){ar[c3]=avgCentered(aq,c3);}
+   const c4=c3-6; if(c4>=6 && ar[c4-6]!=null && ar[c4+6]!=null){const as=avgCentered(ar,c4); const zp=(as-9.8)/10; const targetIndex=c4+1; if(data[targetIndex]) data[targetIndex].zp=zp;}
+ }
+ $('hz').textContent=(1/dt).toFixed(1)+' Hz';updateStats();draw();
 }
-function onMotion(e){
-  if(!running)return;
-  const a=e.accelerationIncludingGravity, r=e.rotationRate;
-  if(!a||!r)return;
-  const nowMs=performance.now();
-  let dt=lastEventMs==null?((e.interval||10)/1000):(nowMs-lastEventMs)/1000;
-  lastEventMs=nowMs;if(!(dt>0&&dt<0.2))dt=(e.interval||10)/1000;
-  if(t0==null)t0=nowMs; const t=(nowMs-t0)/1000;
-  const acc=[ACC_SIGN*a.x,ACC_SIGN*a.y,ACC_SIGN*a.z];
-  // W3C DeviceMotion：alpha→X、beta→Y、gamma→Z；deg/s 轉 rad/s
-  const gyro=[GYRO_SIGN*(r.alpha||0)*Math.PI/180,GYRO_SIGN*(r.beta||0)*Math.PI/180,GYRO_SIGN*(r.gamma||0)*Math.PI/180];
-  if(!calibrated){
-    cal.push(acc);
-    setStatus(`Z 軸校正中：${cal.length}/${CAL_N}`);
-    if(cal.length>=CAL_N)calibrate();
-    draw(); return;
-  }
-  const dx=gyro[0]*dt,dy=gyro[1]*dt,dz=gyro[2]*dt;
-  // 與 Excel 相同：三條基底軸都依 X→Y→Z 順序更新
-  zAxis=norm(rotate(zAxis,dx,dy,dz));
-  yAxis=norm(rotate(yAxis,dx,dy,dz));
-  xAxis=norm(rotate(xAxis,dx,dy,dz));
-  // Excel AL/AM/AN：轉換後 X/Y/Z 角速度
-  const wx=dot(xAxis,gyro), wy=dot(yAxis,gyro), wz=dot(zAxis,gyro);
-  data.push({t,wx,wy,wz,gx:gyro[0],gy:gyro[1],gz:gyro[2],xx:xAxis[0],xy:xAxis[1],xz:xAxis[2],yx:yAxis[0],yy:yAxis[1],yz:yAxis[2],zx:zAxis[0],zy:zAxis[1],zz:zAxis[2]});
-  $('wx').textContent=wx.toFixed(4)+' rad/s'; $('wy').textContent=wy.toFixed(4)+' rad/s'; $('wz').textContent=wz.toFixed(4)+' rad/s'; $('hz').textContent=(1/dt).toFixed(1)+' Hz';
-  lastT=t; draw();
-}
-function draw(){
-  const dpr=window.devicePixelRatio||1, rect=cv.getBoundingClientRect();
-  const W=Math.max(300,rect.width),H=300; if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr)}
-  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
-  const L=48,R=12,T=12,B=32; const last=data.length?data[data.length-1].t:0; const x1=Math.max(WINDOW,last),x0=Math.max(0,x1-WINDOW); const vis=data.filter(p=>p.t>=x0);
-  let ymin=-0.1,ymax=0.1;if(vis.length){const vals=vis.flatMap(p=>[p.wx,p.wy,p.wz]);ymin=Math.min(...vals);ymax=Math.max(...vals);if(ymax-ymin<0.05){const m=(ymax+ymin)/2;ymin=m-0.025;ymax=m+0.025}const pad=(ymax-ymin)*0.12;ymin-=pad;ymax+=pad}
-  const X=t=>L+(t-x0)/(x1-x0)*(W-L-R), Y=v=>T+(ymax-v)/(ymax-ymin)*(H-T-B);
-  ctx.strokeStyle='#ddd';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(L,T);ctx.lineTo(L,H-B);ctx.lineTo(W-R,H-B);ctx.stroke();
-  ctx.fillStyle='#666';ctx.font='11px sans-serif';ctx.textAlign='right';for(let i=0;i<=4;i++){const v=ymax-(ymax-ymin)*i/4,yy=Y(v);ctx.fillText(v.toFixed(2),L-5,yy+4);ctx.strokeStyle='#eee';ctx.beginPath();ctx.moveTo(L,yy);ctx.lineTo(W-R,yy);ctx.stroke()}
-  ctx.textAlign='center';for(let i=0;i<=3;i++){const tt=x0+(x1-x0)*i/3;ctx.fillText(tt.toFixed(1),X(tt),H-10)}
-  function line(key,color){if(vis.length<2)return;ctx.strokeStyle=color;ctx.lineWidth=1.8;ctx.beginPath();vis.forEach((p,i)=>{const xx=X(p.t),yy=Y(p[key]);i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy)});ctx.stroke()}
-  line('wx','#e53935');line('wy','#1e88e5');line('wz','#43a047');
-}
-async function start(){
-  if(typeof DeviceMotionEvent==='undefined'){setStatus('此瀏覽器不支援 DeviceMotion');return}
-  if(typeof DeviceMotionEvent.requestPermission==='function'){
-    try{const p=await DeviceMotionEvent.requestPermission();if(p!=='granted'){setStatus('未取得動作感測器權限');return}}catch(err){setStatus('感測器權限取得失敗');return}
-  }
-  if(!running){running=true;lastEventMs=null;window.addEventListener('devicemotion',onMotion);setStatus(calibrated?'量測中':'Z 軸校正中：0/49',calibrated)}
-}
-function stop(){running=false;window.removeEventListener('devicemotion',onMotion);setStatus('已停止；圖表保留最後資料')}
-function reset(){stop();cal=[];data=[];calibrated=false;t0=null;lastT=null;lastEventMs=null;zAxis=[0,0,1];yAxis=[0,1,0];xAxis=[1,0,0];$('wx').textContent=$('wy').textContent=$('wz').textContent=$('hz').textContent='—';setStatus('已重設，請重新開始');draw()}
-function csv(){if(!data.length){setStatus('目前沒有可匯出的資料');return}const h=['time_s','gyro_raw_x_rad_s','gyro_raw_y_rad_s','gyro_raw_z_rad_s','Xaxis_x','Xaxis_y','Xaxis_z','Yaxis_x','Yaxis_y','Yaxis_z','Zaxis_x','Zaxis_y','Zaxis_z','transformed_wx_rad_s','transformed_wy_rad_s','transformed_wz_rad_s'];const rows=data.map(p=>[p.t,p.gx,p.gy,p.gz,p.xx,p.xy,p.xz,p.yx,p.yy,p.yz,p.zx,p.zy,p.zz,p.wx,p.wy,p.wz]);const blob=new Blob(['\ufeff'+[h,...rows].map(r=>r.join(',')).join('\n')],{type:'text/csv;charset=utf-8'});const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='transformed_xyz_angular_velocity.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+function updateStats(){const valid=[...data].reverse().find(p=>p.zp!=null);$('zprime').textContent=valid?valid.zp.toFixed(5):'等待置中平滑…';if(!data.length){$('thx').textContent=$('thy').textContent='—';return}const p=data[data.length-1];$('thx').textContent=p.tx.toFixed(5)+' rad';$('thy').textContent=p.ty.toFixed(5)+' rad'}
+function draw(){const dpr=window.devicePixelRatio||1,rect=cv.getBoundingClientRect(),W=Math.max(300,rect.width),H=320;if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr)}ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);const L=55,R=12,T=14,B=36;const last=data.length?data[data.length-1].t:0,x1=Math.max(WINDOW,last),x0=Math.max(0,x1-WINDOW),vis=data.filter(p=>p.t>=x0);let ymin=-.05,ymax=.05;if(vis.length){const vals=[];vis.forEach(p=>{vals.push(p.tx,p.ty);if(p.zp!=null)vals.push(p.zp)});if(vals.length){ymin=Math.min(...vals);ymax=Math.max(...vals);const pad=Math.max((ymax-ymin)*.12,.005);ymin-=pad;ymax+=pad}}const X=t=>L+(t-x0)/(x1-x0)*(W-L-R),Y=v=>T+(ymax-v)/(ymax-ymin)*(H-T-B);ctx.strokeStyle='#ddd';ctx.beginPath();ctx.moveTo(L,T);ctx.lineTo(L,H-B);ctx.lineTo(W-R,H-B);ctx.stroke();ctx.fillStyle='#666';ctx.font='11px sans-serif';ctx.textAlign='right';for(let i=0;i<=4;i++){const v=ymax-(ymax-ymin)*i/4,yy=Y(v);ctx.fillText(v.toFixed(3),L-5,yy+4);ctx.strokeStyle='#eee';ctx.beginPath();ctx.moveTo(L,yy);ctx.lineTo(W-R,yy);ctx.stroke()}ctx.textAlign='center';for(let i=0;i<=3;i++){const tt=x0+(x1-x0)*i/3;ctx.fillText(tt.toFixed(1),X(tt),H-11)}ctx.fillStyle='#555';ctx.fillText('時間 (s)',(L+W-R)/2,H-1);function line(key,color){let started=false;ctx.strokeStyle=color;ctx.lineWidth=1.9;ctx.beginPath();vis.forEach(p=>{const v=p[key];if(v==null){started=false;return}const xx=X(p.t),yy=Y(v);if(started)ctx.lineTo(xx,yy);else{ctx.moveTo(xx,yy);started=true}});ctx.stroke()}line('zp','#43a047');line('tx','#e53935');line('ty','#1e88e5')}
+async function start(){if(typeof DeviceMotionEvent==='undefined'){setStatus('此瀏覽器不支援 DeviceMotion');return}if(typeof DeviceMotionEvent.requestPermission==='function'){try{if(await DeviceMotionEvent.requestPermission()!=='granted'){setStatus('未取得動作感測器權限');return}}catch(e){setStatus('感測器權限取得失敗');return}}if(!running){running=true;lastEventMs=null;window.addEventListener('devicemotion',onMotion);setStatus(calibrated?'量測中':'座標校正中：0/49',calibrated)}}
+function stop(){running=false;window.removeEventListener('devicemotion',onMotion);setStatus('已停止；圖表保留')}
+function reset(){stop();cal=[];data=[];ao.length=ap.length=aq.length=ar.length=0;calibrated=false;t0=null;lastEventMs=null;zAxis=[0,0,1];yAxis=[0,1,0];xAxis=[1,0,0];thetaX=thetaY=0;$('hz').textContent='—';updateStats();setStatus('已重設');draw()}
+function csv(){if(!data.length){setStatus('目前沒有可匯出的資料');return}const h=['time_s','AT_Zprime','AU_thetaX_rad','AV_thetaY_rad','transformed_wx_rad_s','transformed_wy_rad_s'];const rows=data.map(p=>[p.t,p.zp??'',p.tx,p.ty,p.wx,p.wy]);const blob=new Blob(['\ufeff'+[h,...rows].map(r=>r.join(',')).join('\n')],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='Excel_AT_AU_AV.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
 $('startBtn').onclick=start;$('stopBtn').onclick=stop;$('resetBtn').onclick=reset;$('csvBtn').onclick=csv;window.addEventListener('resize',draw);draw();
 })();
 </script>
