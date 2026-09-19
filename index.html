@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>依 Excel：XY 軌跡</title>
+<style>
+body{margin:0;background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:900px;margin:auto;padding:12px}.card{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:14px;margin:10px 0}
+h2{margin:0 0 12px}.controls,.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+label{font-size:14px;color:#b1bac4}input{width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #484f58;border-radius:9px;background:#0d1117;color:white;font-size:17px}
+button{padding:11px 14px;margin:4px;border:0;border-radius:9px;font-size:15px}.go{background:#238636;color:white}.stop{background:#da3633;color:white}.sub{background:#30363d;color:white}
+.stat{text-align:center;background:#0d1117;border-radius:10px;padding:10px}.num{font-size:23px;font-weight:700}
+canvas{width:100%;height:440px;background:white;border-radius:10px;display:block}.note{font-size:12px;color:#8c959f;line-height:1.55}
+@media(max-width:600px){.controls,.stats{grid-template-columns:1fr}canvas{height:390px}}
+</style></head>
+<body><main>
+<div class="card"><h2>依 Excel：XY 導航</h2>
+<div class="controls">
+<label>判斷數（BJ2）<input id="judge" type="number" step="0.01" value="0.15"></label>
+<label>判定一步（BK2）<input id="stepTh" type="number" step="0.01" value="0.08"></label>
+</div>
+<div style="margin-top:10px"><button class="go" id="start">開始量測</button><button class="stop" id="stop">停止</button><button class="sub" id="reset">重設</button><button class="sub" id="csv">匯出 CSV</button></div>
+<p class="note">依此 Excel：前 49 筆加速度建立初始 Z；建立 X/Y/Z 參考軸並依 X→Y→Z 更新；Z 加速度經四層 13 點置中平均後判定一步；X/Y 轉換角度先以 fc=0.05 Hz 一階低通，再用 51 點視窗判斷轉動量。只有 X/Y 轉動量小於「判斷數」時，才累積 Z 軸角速度到航向角。因使用置中視窗，顯示會有必要延遲。</p>
+</div>
+<div class="card stats">
+<div class="stat">步數<div class="num" id="steps">0</div></div>
+<div class="stat">目前航向角<div class="num" id="heading">0.0°</div></div>
+<div class="stat">X<div class="num" id="xv">0.00</div></div>
+<div class="stat">Y<div class="num" id="yv">0.00</div></div>
+</div>
+<div class="card"><h2>XY 軌跡</h2><canvas id="plot" width="850" height="440"></canvas></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const accSign=-1, fc=0.05;
+let running=false,lastClock=null,samples=[],basis=null,originT=0, path=[{x:0,y:0}], result=[];
+function norm(v){let n=Math.hypot(v[0],v[1],v[2])||1;return v.map(q=>q/n)}
+function cross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]]}
+function dot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]}
+function rotate(v,dx,dy,dz){
+ let [x,y,z]=v;
+ let K=x,L=y*Math.cos(dx)+z*Math.sin(dx),M=-y*Math.sin(dx)+z*Math.cos(dx);
+ let N=-M*Math.sin(dy)+K*Math.cos(dy),O=L,P=M*Math.cos(dy)+K*Math.sin(dy);
+ return [N*Math.cos(dz)+O*Math.sin(dz),-N*Math.sin(dz)+O*Math.cos(dz),P];
+}
+function initBasis(){
+ if(samples.length<49)return false;
+ let a=[0,0,0];for(let i=0;i<49;i++)for(let k=0;k<3;k++)a[k]+=samples[i].a[k];
+ let z=norm(a), d=Math.hypot(z[2],z[1])||1, y=[0,z[2]/d,-z[1]/d], x=norm(cross(y,z));
+ basis={x,y:norm(y),z}; return true;
+}
+function centered(a,i,r=6){
+ if(i-r<0||i+r>=a.length)return NaN;let s=0;
+ for(let k=i-r;k<=i+r;k++){if(!Number.isFinite(a[k]))return NaN;s+=a[k]}
+ return s/(2*r+1);
+}
+function calc(){
+ const n=samples.length;if(n<55)return;
+ // Reproduce orientation and Excel transformed channels from the captured samples.
+ let a0=[0,0,0];for(let i=0;i<49;i++)for(let k=0;k<3;k++)a0[k]+=samples[i].a[k];
+ let z=norm(a0),d=Math.hypot(z[2],z[1])||1,y=norm([0,z[2]/d,-z[1]/d]),x=norm(cross(y,z));
+ let AR=new Array(n).fill(0),AS=new Array(n).fill(0),AV=new Array(n).fill(NaN),BD=new Array(n).fill(0);
+ let AT=new Array(n).fill(0),AU=new Array(n).fill(0),ao=new Array(n),ap=new Array(n),aq=new Array(n);
+ for(let i=1;i<n;i++){
+   let dt=Math.max(.001,Math.min(.1,samples[i].t-samples[i-1].t)), w=samples[i].w;
+   x=norm(rotate(x,w[0]*dt,w[1]*dt,w[2]*dt)); y=norm(rotate(y,w[0]*dt,w[1]*dt,w[2]*dt)); z=norm(rotate(z,w[0]*dt,w[1]*dt,w[2]*dt));
+   ao[i]=dot(x,w);ap[i]=dot(y,w);aq[i]=dot(z,w);
+   AR[i]=AR[i-1]+ao[i]*dt;AS[i]=AS[i-1]+ap[i]*dt;
+   let tau=1/(2*Math.PI*fc), alpha=dt/(tau+dt);
+   AT[i]=AT[i-1]+alpha*(AR[i]-AT[i-1]); AU[i]=AU[i-1]+alpha*(AS[i]-AU[i-1]);
+   // Excel AV row uses previous acceleration sample with current tracked Z.
+   AV[i]=dot(samples[i-1].a,z);
+   BD[i]=dot(w,z);
+ }
+ let AW=AV.map((_,i)=>centered(AV,i)), AX=AW.map((_,i)=>centered(AW,i)), AY=AX.map((_,i)=>centered(AX,i)), AZ=AY.map((_,i)=>centered(AY,i));
+ let step=new Array(n).fill(0), stepTh=+$('stepTh').value;
+ for(let i=4;i<n-4;i++) if([AZ[i-4],AZ[i-3],AZ[i-2],AZ[i-1],AZ[i],AZ[i+1],AZ[i+2],AZ[i+3],AZ[i+4]].every(Number.isFinite))
+   step[i]=(AZ[i-4]<AZ[i-3]&&AZ[i-3]<AZ[i-2]&&AZ[i-2]<AZ[i-1]&&AZ[i-1]<AZ[i]&&AZ[i]>AZ[i+1]&&AZ[i+1]>AZ[i+2]&&AZ[i+2]>AZ[i+3]&&AZ[i+3]>AZ[i+4]&&AZ[i]-AZ[i+4]>stepTh)?1:0;
+ let judge=+$('judge').value, BE=new Array(n).fill(0), px=0,py=0,count=0;path=[{x:0,y:0}];result=[];
+ for(let i=1;i<n;i++){
+   let lo=Math.max(0,i-25),hi=Math.min(n-1,i+25), rAT=AT.slice(lo,hi+1),rAU=AU.slice(lo,hi+1);
+   let swing=Math.max(...rAT)+Math.max(...rAU)-Math.min(...rAT)-Math.min(...rAU);
+   let dt=samples[i].t-samples[i-1].t;
+   BE[i]=swing<judge ? BE[i-1]+BD[i]*dt : BE[i-1];
+   if(step[i]){count++;px+=-Math.sin(BE[i]);py+=Math.cos(BE[i]);path.push({x:px,y:py});}
+   result.push({t:samples[i].t,AT:AT[i],AU:AU[i],AZ:AZ[i],step:step[i],wz:BD[i],heading:BE[i],x:px,y:py,swing});
+ }
+ $('steps').textContent=count;$('xv').textContent=px.toFixed(2);$('yv').textContent=py.toFixed(2);$('heading').textContent=(BE[n-1]*180/Math.PI).toFixed(1)+'°';draw();
+}
+function onMotion(e){
+ if(!running)return;let a=e.accelerationIncludingGravity,g=e.rotationRate;if(!a||!g)return;
+ let clk=performance.now()/1000;if(lastClock==null){lastClock=clk;originT=clk}
+ let t=clk-originT;lastClock=clk;
+ samples.push({t,a:[accSign*(a.x||0),accSign*(a.y||0),accSign*(a.z||0)],w:[(g.alpha||0)*Math.PI/180,(g.beta||0)*Math.PI/180,(g.gamma||0)*Math.PI/180]});
+ if(samples.length%5===0)calc();
+}
+function draw(){
+ let c=$('plot'),q=c.getContext('2d'),W=c.width,H=c.height;q.fillStyle='white';q.fillRect(0,0,W,H);
+ let p=path.length?path:[{x:0,y:0}],xs=p.map(v=>v.x),ys=p.map(v=>v.y),minx=Math.min(...xs),maxx=Math.max(...xs),miny=Math.min(...ys),maxy=Math.max(...ys);
+ let span=Math.max(maxx-minx,maxy-miny,2),sc=Math.min((W-70)/span,(H-70)/span),cx=(minx+maxx)/2,cy=(miny+maxy)/2,X=v=>W/2+(v-cx)*sc,Y=v=>H/2-(v-cy)*sc;
+ q.strokeStyle='#ddd';q.lineWidth=1;q.beginPath();q.moveTo(0,Y(0));q.lineTo(W,Y(0));q.moveTo(X(0),0);q.lineTo(X(0),H);q.stroke();
+ q.strokeStyle='#0969da';q.lineWidth=3;q.beginPath();p.forEach((v,i)=>i?q.lineTo(X(v.x),Y(v.y)):q.moveTo(X(v.x),Y(v.y)));q.stroke();
+ q.fillStyle='#1a7f37';q.beginPath();q.arc(X(0),Y(0),6,0,7);q.fill();let e=p[p.length-1];q.fillStyle='#cf222e';q.beginPath();q.arc(X(e.x),Y(e.y),6,0,7);q.fill();
+}
+async function start(){if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){let p=await DeviceMotionEvent.requestPermission();if(p!=='granted'){alert('需要動作與方向感測器權限');return}}running=true;window.addEventListener('devicemotion',onMotion)}
+function stop(){running=false;window.removeEventListener('devicemotion',onMotion);calc()}
+function reset(){stop();samples=[];result=[];path=[{x:0,y:0}];basis=null;lastClock=null;$('steps').textContent='0';$('heading').textContent='0.0°';$('xv').textContent='0.00';$('yv').textContent='0.00';draw()}
+function csv(){let s='t,thetaX_LP,thetaY_LP,Z_filtered,step,wZ,heading,X,Y,XY_judge_value\n';result.forEach(r=>s+=[r.t,r.AT,r.AU,r.AZ,r.step,r.wz,r.heading,r.x,r.y,r.swing].join(',')+'\n');let b=new Blob([s],{type:'text/csv;charset=utf-8'}),u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download='XY_navigation.csv';a.click();setTimeout(()=>URL.revokeObjectURL(u),500)}
+$('start').onclick=start;$('stop').onclick=stop;$('reset').onclick=reset;$('csv').onclick=csv;['judge','stepTh'].forEach(id=>$(id).onchange=calc);draw();
+</script></body></html>
